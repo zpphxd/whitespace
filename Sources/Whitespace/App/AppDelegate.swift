@@ -42,6 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileSearch.onPick = { [weak self] path in self?.canvas.addFileNode(path: path) }
         canvas.onSlashSearch = { [weak self] in self?.fileSearch.show() }
 
+        // Catch "/" app-wide (works whichever of our windows is key), except
+        // while typing in a text field, so it always opens the file search.
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.window.isEditing else { return event }
+            if event.charactersIgnoringModifiers == "/", !self.isTextEditing() {
+                self.fileSearch.show()
+                return nil
+            }
+            return event
+        }
+
         controller.addTab = { [weak self] in self?.addBoard() }
         controller.selectTab = { [weak self] i in self?.selectBoard(i) }
         controller.renameTab = { [weak self] i, name in self?.renameBoard(i, name) }
@@ -63,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onTogglePalette: { [weak self] in self?.togglePalette() },
             onExportPNG: { [weak self] in self?.export(.png) },
-            onExportSVG: { [weak self] in self?.export(.svg) }
+            onExportSVG: { [weak self] in self?.export(.svg) },
+            onLinkFile: { [weak self] in self?.fileSearch.show() }
         )
 
         // System-wide hotkeys (one shared handler dispatches by id):
@@ -186,6 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .svg:
             try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+
+    /// True when a text field / editor is focused, so "/" should type normally.
+    private func isTextEditing() -> Bool {
+        (NSApp.keyWindow?.firstResponder as? NSText) != nil
     }
 
     @objc private func screensChanged() {

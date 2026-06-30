@@ -14,6 +14,7 @@ final class MenuBarController {
     private var togglePalette: (() -> Void)?
     private var exportPNG: (() -> Void)?
     private var exportSVG: (() -> Void)?
+    private var linkFile: (() -> Void)?
     private let paletteItem: NSMenuItem
 
     init(onToggleEdit: @escaping () -> Void,
@@ -23,7 +24,8 @@ final class MenuBarController {
          onToggleKeepIcons: @escaping (Bool) -> Void,
          onTogglePalette: @escaping () -> Void,
          onExportPNG: @escaping () -> Void,
-         onExportSVG: @escaping () -> Void) {
+         onExportSVG: @escaping () -> Void,
+         onLinkFile: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setIdleOpacity = onSetIdleOpacity
@@ -32,6 +34,7 @@ final class MenuBarController {
         self.togglePalette = onTogglePalette
         self.exportPNG = onExportPNG
         self.exportSVG = onExportSVG
+        self.linkFile = onLinkFile
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -66,6 +69,11 @@ final class MenuBarController {
         keepIcons.state = Settings.keepDesktopIcons ? .on : .off
         menu.addItem(keepIcons)
         menu.addItem(makeBoardMenu())
+        menu.addItem(.separator())
+
+        let linkItem = NSMenuItem(title: "Link File…", action: #selector(linkFileAction), keyEquivalent: "")
+        linkItem.target = self
+        menu.addItem(linkItem)
         menu.addItem(.separator())
 
         let exportPNGItem = NSMenuItem(title: "Export as PNG…", action: #selector(exportPNGItemAction), keyEquivalent: "")
@@ -156,6 +164,7 @@ final class MenuBarController {
     @objc private func togglePaletteItem() { togglePalette?() }
     @objc private func exportPNGItemAction() { exportPNG?() }
     @objc private func exportSVGItemAction() { exportSVG?() }
+    @objc private func linkFileAction() { linkFile?() }
     @objc private func toggleEdit() { onToggleEdit() }
     @objc private func quit(_ sender: Any?) { quitHandler?() }
 }
