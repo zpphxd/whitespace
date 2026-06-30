@@ -44,12 +44,16 @@ final class CanvasView: NSView {
         case pan
         case erase
         case rotate(id: String, center: CGPoint, offset: CGFloat)
+        case lasso
+        case laser
     }
     private var drag: Drag = .none
     private var dragStart: CGPoint = .zero
     private var lastPanPoint: CGPoint = .zero
     private var spaceDown = false
     private var marqueeRect: CGRect?
+    private var lassoPoints: [CGPoint] = []
+    private var laserPoints: [CGPoint] = []
 
     private var textField: NSTextField?
     private var editingTextId: String?
@@ -186,6 +190,8 @@ final class CanvasView: NSView {
 
         drawSelection(in: ctx)
         drawMarquee(in: ctx)
+        drawLasso(in: ctx)
+        drawLaser(in: ctx)
         drawEditBorder(in: ctx)
     }
 
@@ -278,6 +284,27 @@ final class CanvasView: NSView {
         return camera.sceneToView(rotatePoint(above, around: c, by: CGFloat(e.angle)))
     }
 
+    private func drawLasso(in ctx: CGContext) {
+        guard lassoPoints.count > 1 else { return }
+        let pts = lassoPoints.map { camera.sceneToView($0) }
+        ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
+        ctx.setLineWidth(1.5)
+        ctx.setLineDash(phase: 0, lengths: [5, 4])
+        ctx.move(to: pts[0]); pts.dropFirst().forEach { ctx.addLine(to: $0) }
+        ctx.strokePath()
+        ctx.setLineDash(phase: 0, lengths: [])
+    }
+
+    private func drawLaser(in ctx: CGContext) {
+        guard laserPoints.count > 1 else { return }
+        let pts = laserPoints.map { camera.sceneToView($0) }
+        ctx.setStrokeColor(NSColor.systemRed.cgColor)
+        ctx.setLineWidth(4)
+        ctx.setLineCap(.round); ctx.setLineJoin(.round)
+        ctx.move(to: pts[0]); pts.dropFirst().forEach { ctx.addLine(to: $0) }
+        ctx.strokePath()
+    }
+
     private func drawMarquee(in ctx: CGContext) {
         guard let m = marqueeRect else { return }
         let r = viewRect(m)
@@ -340,8 +367,12 @@ final class CanvasView: NSView {
         } else if tool == .line || tool == .arrow {
             beginLine(at: p, type: tool == .line ? "line" : "arrow",
                       elbow: tool == .arrow && controller.style.elbowArrow)
+        } else if tool == .lasso {
+            lassoPoints = [p]; drag = .lasso
+        } else if tool == .laser {
+            laserPoints = [p]; drag = .laser
         } else {
-            beginShape(at: p, type: tool.rawValue)
+            beginShape(at: p, type: tool.rawValue)  // rectangle / ellipse / diamond / frame
         }
     }
 
@@ -395,6 +426,10 @@ final class CanvasView: NSView {
         case .rotate(let id, let center, let offset):
             let a = atan2(p.y - center.y, p.x - center.x)
             scene.update(id: id) { $0.angle = Double(a - offset) }
+        case .lasso:
+            lassoPoints.append(p); needsDisplay = true
+        case .laser:
+            laserPoints.append(p); needsDisplay = true
         case .none:
             break
         }
@@ -466,12 +501,42 @@ final class CanvasView: NSView {
                 }
                 rebuildArrow(id)
             }
+        case .lasso:
+            selectInLasso()
+            lassoPoints = []
+            needsDisplay = true
+        case .laser:
+            laserPoints = []  // trail clears on release
+            needsDisplay = true
         case .freedraw:
             break
         default:
             break
         }
         drag = .none
+    }
+
+    private func selectInLasso() {
+        guard lassoPoints.count >= 3 else { return }
+        let poly = lassoPoints
+        let ids = scene.elements.filter { e in
+            e.containerId == nil && Self.pointInPolygon(CGPoint(x: e.boundingRect.midX, y: e.boundingRect.midY), poly)
+        }.map(\.id)
+        scene.selection = Set(ids)
+        updateSelectionState()
+    }
+
+    private static func pointInPolygon(_ p: CGPoint, _ poly: [CGPoint]) -> Bool {
+        var inside = false
+        var j = poly.count - 1
+        for i in 0..<poly.count {
+            if (poly[i].y > p.y) != (poly[j].y > p.y),
+               p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x {
+                inside.toggle()
+            }
+            j = i
+        }
+        return inside
     }
 
     // MARK: Interactions
@@ -540,6 +605,9 @@ final class CanvasView: NSView {
         var e = makeElement(type: type, x: p.x, y: p.y, width: 0, height: 0)
         if type == "rectangle" || type == "diamond" {
             e.roundness = controller.style.rounded ? Element.Roundness(type: 3) : nil
+        } else if type == "frame" {
+            e.text = "Frame"
+            e.backgroundColor = "transparent"
         }
         scene.add(e)
         drag = .create(id: e.id)
@@ -707,6 +775,21 @@ final class CanvasView: NSView {
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
         addLink(link: path, name: (path as NSString).lastPathComponent)
+    }
+
+    /// Drop a web-embed card (opens the URL on double-click).
+    func addEmbed(url: String) {
+        let host = URL(string: url)?.host ?? url
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "embed", x: center.x - 130, y: center.y - 85, width: 260, height: 170)
+        e.link = url
+        e.text = host
+        e.backgroundColor = "#ffffff"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
     }
 
     /// Insert an image element from a file path, sized to fit ~320pt.

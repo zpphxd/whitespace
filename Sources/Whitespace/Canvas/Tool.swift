@@ -2,8 +2,13 @@ import Foundation
 
 enum Tool: String, CaseIterable {
     case hand, select, rectangle, ellipse, diamond, arrow, line, freedraw, text, eraser
+    case frame, lasso, laser
 
-    var creates: Bool { self != .select && self != .hand && self != .eraser }
+    /// Tools shown in the main toolbar row (the rest live in the "more" menu).
+    static let primary: [Tool] = [.hand, .select, .rectangle, .ellipse, .diamond,
+                                  .arrow, .line, .freedraw, .text, .eraser]
+
+    var creates: Bool { [.rectangle, .ellipse, .diamond, .arrow, .line, .freedraw, .text, .frame].contains(self) }
 
     /// Keyboard shortcut (Excalidraw-style single keys).
     var key: Character {
@@ -18,6 +23,9 @@ enum Tool: String, CaseIterable {
         case .freedraw: return "p"
         case .text: return "t"
         case .eraser: return "e"
+        case .frame: return "f"
+        case .lasso: return "q"
+        case .laser: return "k"
         }
     }
 
@@ -33,6 +41,18 @@ enum Tool: String, CaseIterable {
         case .freedraw: return "pencil"
         case .text: return "textformat"
         case .eraser: return "eraser"
+        case .frame: return "grid"
+        case .lasso: return "lasso"
+        case .laser: return "wand.and.rays"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .frame: return "Frame"
+        case .lasso: return "Lasso selection"
+        case .laser: return "Laser pointer"
+        default: return rawValue.capitalized
         }
     }
 }

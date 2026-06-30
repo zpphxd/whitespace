@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.linkFileAction = { [weak self] in self?.linkFile() }
         controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.insertImageAction = { [weak self] in self?.insertImage() }
+        controller.webEmbedAction = { [weak self] in self?.webEmbed() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setIdleOpacity = { [weak self] v in
             Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
@@ -266,6 +267,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url {
             canvas.addFileNode(path: url.path)
+        }
+    }
+
+    private func webEmbed() {
+        let alert = NSAlert()
+        alert.messageText = "Web Embed"
+        alert.informativeText = "Enter a URL to embed as a card (opens in your browser)."
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+        let tf = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        tf.placeholderString = "https://…"
+        alert.accessoryView = tf
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = tf
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = tf.stringValue.trimmingCharacters(in: .whitespaces)
+            if !url.isEmpty { canvas.addEmbed(url: url) }
         }
     }
 
