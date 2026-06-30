@@ -1,8 +1,10 @@
 import AppKit
+import Combine
 
 /// The drawing surface: renders the scene under the camera and handles all
 /// pointer/keyboard interaction (create, select, move, resize, pan, zoom).
 final class CanvasView: NSView {
+    private var cancellables = Set<AnyCancellable>()
 
     let scene: Scene
     let controller: CanvasController
@@ -63,6 +65,19 @@ final class CanvasView: NSView {
         }
         registerForDraggedTypes([.fileURL])
         wireController()
+
+        // Switching to a non-select tool deselects, so the inspector reflects
+        // the new tool (e.g. the text tool shows Font / Text size).
+        controller.$tool
+            .sink { [weak self] newTool in
+                guard let self, newTool != .select, !self.scene.selection.isEmpty else { return }
+                self.commitText()
+                self.scene.selection.removeAll()
+                self.controller.hasSelection = false
+                self.controller.selectionType = nil
+                self.needsDisplay = true
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: Drag-and-drop (files / .excalidraw)
