@@ -19,8 +19,9 @@ struct ToolPaletteView: View {
             Divider()
             inspector
         }
-        .padding(16)
-        .frame(width: 300)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 18)
+        .frame(width: 332)
         .liquidGlassPanel(cornerRadius: 24)
     }
 
@@ -87,13 +88,13 @@ struct ToolPaletteView: View {
     }
 
     private var tools: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(Tool.allCases, id: \.self) { tool in
                 Button {
                     controller.tool = tool
                 } label: {
                     Image(systemName: tool.symbol)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 25, height: 26)
                         .background(controller.tool == tool ? Color(hex: 0x6965db) : .clear)
                         .foregroundStyle(controller.tool == tool ? .white : .primary)
                         .clipShape(RoundedRectangle(cornerRadius: 7))
@@ -101,10 +102,10 @@ struct ToolPaletteView: View {
                 .buttonStyle(.plain)
                 .help("\(tool.rawValue.capitalized) (\(String(tool.key)))")
             }
-            Divider().frame(height: 18)
+            Divider().frame(height: 18).padding(.horizontal, 1)
             Button { controller.linkFileAction?() } label: {
                 Image(systemName: "paperclip")
-                    .frame(width: 26, height: 26)
+                    .frame(width: 25, height: 26)
                     .clipShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
