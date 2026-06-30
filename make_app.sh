@@ -14,7 +14,22 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/Whitespace "$APP/Contents/MacOS/Whitespace"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+# App icon: generate AppIcon.icns from AppIcon.png (all required sizes).
+ICON_PLIST=""
+if [ -f AppIcon.png ]; then
+    ICONSET="AppIcon.iconset"
+    rm -rf "$ICONSET"; mkdir "$ICONSET"
+    for s in 16 32 128 256 512; do
+        sips -z $s $s AppIcon.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null 2>&1
+        d=$((s * 2))
+        sips -z $d $d AppIcon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null 2>&1
+    done
+    iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+    rm -rf "$ICONSET"
+    ICON_PLIST="    <key>CFBundleIconFile</key>        <string>AppIcon</string>"
+fi
+
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -29,6 +44,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>LSMinimumSystemVersion</key>  <string>13.0</string>
     <key>LSUIElement</key>             <true/>
     <key>NSHighResolutionCapable</key> <true/>
+${ICON_PLIST}
 </dict>
 </plist>
 PLIST
