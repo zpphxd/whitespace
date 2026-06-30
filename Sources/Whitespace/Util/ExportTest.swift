@@ -36,6 +36,17 @@ enum ExportTest {
         elements.append(Element(type: "text", x: 70, y: 320, width: 150, height: 90, seed: 10,
                                 text: "This text should wrap to fit the box width", fontSize: 20))
 
+        // Container-bound, centered text inside a rounded rectangle.
+        var box = Element(type: "rectangle", x: 60, y: 430, width: 200, height: 90,
+                          backgroundColor: "#ffec99", fillStyle: .solid, seed: 14)
+        box.roundness = Element.Roundness(type: 3)
+        var label = Element(type: "text", x: 60, y: 430, width: 200, height: 90, seed: 15,
+                            text: "Centered label that wraps inside the box", fontSize: 18)
+        label.containerId = box.id
+        label.textAlign = "center"; label.verticalAlign = "middle"
+        elements.append(box)
+        elements.append(label)
+
         var image = Element(type: "image", x: 470, y: 60, width: 120, height: 120, seed: 13)
         image.link = "/Users/zachpowers/whitespace/AppIcon.png"
         elements.append(image)

@@ -122,9 +122,10 @@ final class Scene {
         notify()
     }
 
-    /// Topmost element hit by a scene-space point.
+    /// Topmost element hit by a scene-space point. Bound (container) text is
+    /// skipped so clicks land on its container shape.
     func hitTest(_ p: CGPoint, tolerance: CGFloat) -> Element? {
-        for e in elements.reversed() where !e.locked {
+        for e in elements.reversed() where !e.locked && e.containerId == nil {
             if e.hitTest(p, tolerance: tolerance) { return e }
         }
         return nil

@@ -209,14 +209,17 @@ final class ElementRenderer {
             .font: font, .foregroundColor: color.withAlphaComponent(opacity),
         ]
         let lineHeight = CGFloat(e.lineHeight ?? 1.25) * size
-        // Wrap to the box width at a FIXED font size (text reflows, never scales).
-        // An unsized box (width ~0) doesn't wrap — it lays out on one line.
-        let wrapWidth: CGFloat = e.width > 8 ? max(CGFloat(e.width) - 4, 24) : 100_000
+        // Bound (container) text is centered in the shape; free text is left/top.
+        let centered = e.containerId != nil
+        let wrapWidth: CGFloat = e.width > 8 ? max(CGFloat(e.width) - (centered ? 16 : 4), 24) : 100_000
 
-        ctx.saveGState()
-        var ty = e.y + size
+        // Build wrapped lines.
+        var lines: [CTLine] = []
         for paragraph in text.components(separatedBy: "\n") {
-            if paragraph.isEmpty { ty += lineHeight; continue }
+            if paragraph.isEmpty {
+                lines.append(CTLineCreateWithAttributedString(NSAttributedString(string: " ", attributes: attrs)))
+                continue
+            }
             let attr = NSAttributedString(string: paragraph, attributes: attrs)
             let typesetter = CTTypesetterCreateWithAttributedString(attr)
             let length = (paragraph as NSString).length
@@ -224,13 +227,22 @@ final class ElementRenderer {
             while start < length {
                 let count = CTTypesetterSuggestLineBreak(typesetter, start, Double(wrapWidth))
                 if count <= 0 { break }
-                let line = CTTypesetterCreateLine(typesetter, CFRange(location: start, length: count))
-                ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-                ctx.textPosition = CGPoint(x: e.x + 2, y: ty)
-                CTLineDraw(line, ctx)
-                ty += lineHeight
+                lines.append(CTTypesetterCreateLine(typesetter, CFRange(location: start, length: count)))
                 start += count
             }
+        }
+
+        ctx.saveGState()
+        var ty: CGFloat = centered
+            ? CGFloat(e.rect.midY) - CGFloat(lines.count) * lineHeight / 2 + size * 0.85
+            : CGFloat(e.y) + size
+        for line in lines {
+            let lineWidth = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let x: CGFloat = centered ? (CGFloat(e.rect.midX) - lineWidth / 2) : (CGFloat(e.x) + 2)
+            ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            ctx.textPosition = CGPoint(x: x, y: ty)
+            CTLineDraw(line, ctx)
+            ty += lineHeight
         }
         ctx.restoreGState()
     }

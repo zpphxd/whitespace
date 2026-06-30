@@ -261,6 +261,9 @@ final class CanvasView: NSView {
             if let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) {
                 if let link = hit.link, !link.isEmpty { openLink(link); return }
                 if hit.type == "text" { beginEditingText(hit); return }
+                if ["rectangle", "ellipse", "diamond"].contains(hit.type) {
+                    beginContainerText(hit); return
+                }
             }
             beginText(at: p)
             return
@@ -320,9 +323,11 @@ final class CanvasView: NSView {
                 scene.update(id: id) { e in e.x = origin.x + dx; e.y = origin.y + dy }
             }
             rebuildArrowsBound(to: Set(origins.keys))
+            syncBoundTexts(to: Set(origins.keys))
         case .resize(let id, let handle, let start):
             resize(id: id, handle: handle, start: start, to: p)
             rebuildArrowsBound(to: [id])
+            syncBoundTexts(to: [id])
         case .endpoint(let id, let isStart, let otherAbs):
             let a = isStart ? p : otherAbs
             let b = isStart ? otherAbs : p
@@ -342,6 +347,18 @@ final class CanvasView: NSView {
             scene.update(id: id) { $0.angle = Double(a - offset) }
         case .none:
             break
+        }
+    }
+
+    /// Keep container-bound text matching its shape's box as it moves/resizes.
+    private func syncBoundTexts(to ids: Set<String>) {
+        for t in scene.elements where t.type == "text" && t.containerId != nil && ids.contains(t.containerId!) {
+            guard let container = scene.element(t.containerId!) else { continue }
+            let r = container.rect
+            scene.update(id: t.id) { e in
+                e.x = r.minX; e.y = r.minY; e.width = r.width; e.height = r.height
+            }
+            renderer.invalidate(t.id)
         }
     }
 
@@ -886,6 +903,27 @@ final class CanvasView: NSView {
         presentTextEditor(for: e)
     }
 
+    /// Add/edit text bound inside a shape (centered, wrapping to the shape).
+    private func beginContainerText(_ shape: Element) {
+        if let existing = scene.elements.first(where: { $0.type == "text" && $0.containerId == shape.id }) {
+            beginEditingText(existing)
+            return
+        }
+        scene.beginEdit()
+        let r = shape.rect
+        var e = makeElement(type: "text", x: r.minX, y: r.minY, width: r.width, height: r.height)
+        e.text = ""
+        e.fontSize = controller.style.fontSize
+        e.fontFamily = controller.style.fontFamily
+        e.strokeColor = controller.style.strokeColor
+        e.containerId = shape.id
+        e.textAlign = "center"
+        e.verticalAlign = "middle"
+        scene.add(e)
+        scene.selection = [shape.id]
+        presentTextEditor(for: e)
+    }
+
     /// Edit an existing text element in place (double-click).
     private func beginEditingText(_ e: Element) {
         scene.beginEdit()
@@ -895,10 +933,20 @@ final class CanvasView: NSView {
     }
 
     private func presentTextEditor(for e: Element) {
-        let viewOrigin = camera.sceneToView(CGPoint(x: e.x, y: e.y))
         let size = CGFloat(e.fontSize ?? 20) * camera.zoom
-        let field = NSTextField(frame: NSRect(x: viewOrigin.x, y: viewOrigin.y,
-                                              width: max(240, e.width * camera.zoom + 40), height: size + 8))
+        let h = size + 8
+        let frame: NSRect
+        if e.containerId != nil {
+            // Centered inside the container.
+            let leftMid = camera.sceneToView(CGPoint(x: e.x, y: e.rect.midY))
+            frame = NSRect(x: leftMid.x + 8, y: leftMid.y - h / 2,
+                           width: max(40, e.width * camera.zoom - 16), height: h)
+        } else {
+            let origin = camera.sceneToView(CGPoint(x: e.x, y: e.y))
+            frame = NSRect(x: origin.x, y: origin.y, width: max(240, e.width * camera.zoom + 40), height: h)
+        }
+        let field = NSTextField(frame: frame)
+        if e.containerId != nil { field.alignment = .center }
         field.stringValue = e.text ?? ""
         field.font = Fonts.font(family: e.fontFamily ?? 1, size: size)
         field.isBordered = false
@@ -926,11 +974,13 @@ final class CanvasView: NSView {
         if value.isEmpty {
             scene.remove(id: id)
         } else {
-            let width = (value as NSString).size(withAttributes: [.font: Fonts.font(family: family, size: size)]).width
             scene.update(id: id) { e in
                 e.text = value
-                e.width = Double(width) + 8
-                e.height = Double(size) * 1.25
+                if e.containerId == nil {  // free text hugs its content; bound text keeps the shape's box
+                    let width = (value as NSString).size(withAttributes: [.font: Fonts.font(family: family, size: size)]).width
+                    e.width = Double(width) + 8
+                    e.height = Double(size) * 1.25
+                }
             }
             renderer.invalidate(id)
         }
