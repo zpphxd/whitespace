@@ -24,7 +24,7 @@ struct ToolPaletteView: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
-        .frame(width: 356)
+        .frame(width: 332)
         .liquidGlassPanel(cornerRadius: 24)
     }
 
@@ -155,14 +155,6 @@ struct ToolPaletteView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Link a file, folder, or URL")
-
-            Button { controller.clearBoardAction?() } label: {
-                Image(systemName: "eraser")
-                    .frame(width: 25, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-            }
-            .buttonStyle(.plain)
-            .help("Clear the board")
         }
     }
 
@@ -204,7 +196,7 @@ struct ToolPaletteView: View {
                     get: { controller.style.fontSize },
                     set: { controller.style.fontSize = $0; apply() }), in: 8...72)
             }
-            if controller.hasSelection { actionsSection }
+            bottomBar
         }
         .font(.system(size: 12))
     }
@@ -217,14 +209,16 @@ struct ToolPaletteView: View {
         }
     }
 
-    private var actionsSection: some View {
+    private var bottomBar: some View {
         HStack {
-            Button(role: .destructive) { controller.deleteSelection?() } label: {
-                Label("Delete", systemImage: "trash")
+            Button { controller.clearBoardAction?() } label: {
+                Label("Clear", systemImage: "eraser")
             }
             Spacer()
-            Button { controller.sendSelectionToBack?() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
-            Button { controller.bringSelectionToFront?() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+            if controller.hasSelection {
+                Button { controller.sendSelectionToBack?() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
+                Button { controller.bringSelectionToFront?() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+            }
         }
         .buttonStyle(.bordered)
         .padding(.top, 4)
