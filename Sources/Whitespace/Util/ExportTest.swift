@@ -28,8 +28,9 @@ enum ExportTest {
         elbow.points = route.map { [$0.x - 90, $0.y - 220] }
         elements.append(elbow)
 
-        elements.append(Element(type: "text", x: 70, y: 320, seed: 10,
-                                text: "Export test", fontSize: 24))
+        // Narrow box to verify the text wraps to fit (not single-line/scaled).
+        elements.append(Element(type: "text", x: 70, y: 320, width: 150, height: 90, seed: 10,
+                                text: "This text should wrap to fit the box width", fontSize: 20))
 
         var fileNode = Element(type: "file", x: 440, y: 300, width: 200, height: 56, seed: 12)
         fileNode.text = "Project Plan.md"

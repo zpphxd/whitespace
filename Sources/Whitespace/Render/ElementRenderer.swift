@@ -147,40 +147,34 @@ final class ElementRenderer {
 
     private func drawText(_ e: Element, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
         guard let text = e.text, !text.isEmpty else { return }
-        let baseSize = CGFloat(e.fontSize ?? 20)
-        let lines = text.components(separatedBy: "\n")
-
-        // Shrink-to-fit: keep the set font size unless the box is too small for
-        // the text — then scale DOWN to fit (never up). Box bigger = same size.
-        var scale: CGFloat = 1
-        let baseFont = Fonts.handDrawn(size: baseSize)
-        let naturalWidth = lines.map { ($0 as NSString).size(withAttributes: [.font: baseFont]).width }.max() ?? 0
-        if e.width > 1, naturalWidth > 0 {
-            scale = min(scale, (CGFloat(e.width) - 6) / naturalWidth)
-        }
-        let naturalHeight = baseSize * 1.25 * CGFloat(lines.count)
-        if e.height > 1, naturalHeight > 0 {
-            scale = min(scale, CGFloat(e.height) / naturalHeight)
-        }
-        scale = max(0.05, min(1, scale))
-
-        let size = baseSize * scale
+        let size = CGFloat(e.fontSize ?? 20)
         let font = Fonts.handDrawn(size: size)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: color.withAlphaComponent(opacity),
         ]
+        let lineHeight = CGFloat(e.lineHeight ?? 1.25) * size
+        // Wrap to the box width at a FIXED font size (text reflows, never scales).
+        // An unsized box (width ~0) doesn't wrap — it lays out on one line.
+        let wrapWidth: CGFloat = e.width > 8 ? max(CGFloat(e.width) - 4, 24) : 100_000
 
         ctx.saveGState()
-        // Core Text draws upward; flip within the element's box so it reads
-        // top-down in our flipped scene space.
-        let lineHeight = CGFloat(e.lineHeight ?? 1.25) * size
-        var ty = e.y + lineHeight - size * 0.2
-        for line in lines {
-            let ctLine = CTLineCreateWithAttributedString(NSAttributedString(string: line, attributes: attrs))
-            ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-            ctx.textPosition = CGPoint(x: e.x, y: ty)
-            CTLineDraw(ctLine, ctx)
-            ty += lineHeight
+        var ty = e.y + size
+        for paragraph in text.components(separatedBy: "\n") {
+            if paragraph.isEmpty { ty += lineHeight; continue }
+            let attr = NSAttributedString(string: paragraph, attributes: attrs)
+            let typesetter = CTTypesetterCreateWithAttributedString(attr)
+            let length = (paragraph as NSString).length
+            var start = 0
+            while start < length {
+                let count = CTTypesetterSuggestLineBreak(typesetter, start, Double(wrapWidth))
+                if count <= 0 { break }
+                let line = CTTypesetterCreateLine(typesetter, CFRange(location: start, length: count))
+                ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+                ctx.textPosition = CGPoint(x: e.x + 2, y: ty)
+                CTLineDraw(line, ctx)
+                ty += lineHeight
+                start += count
+            }
         }
         ctx.restoreGState()
     }
