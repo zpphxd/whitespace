@@ -45,6 +45,7 @@ final class CanvasView: NSView {
 
     private var textField: NSTextField?
     private var editingTextId: String?
+    private var clipboard: [Element] = []
 
     init(frame: NSRect, scene: Scene, controller: CanvasController) {
         self.scene = scene
@@ -156,11 +157,14 @@ final class CanvasView: NSView {
         commitText()
         let p = scenePoint(event)
 
-        // Double-click a linked element (e.g. a file node) opens it.
-        if event.clickCount == 2,
-           let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
-           let link = hit.link, !link.isEmpty {
-            openLink(link)
+        // Double-click: open a linked element, edit a text element, or start a
+        // new text box on empty canvas.
+        if event.clickCount == 2 {
+            if let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) {
+                if let link = hit.link, !link.isEmpty { openLink(link); return }
+                if hit.type == "text" { beginEditingText(hit); return }
+            }
+            beginText(at: p)
             return
         }
 
@@ -481,6 +485,56 @@ final class CanvasView: NSView {
         updateSelectionState()
     }
 
+    // MARK: Clipboard
+
+    /// Copy selected elements to the in-app clipboard; also put any text on the
+    /// system pasteboard so it can be pasted into other apps.
+    private func copySelection() {
+        let sel = scene.elements.filter { scene.selection.contains($0.id) }
+        guard !sel.isEmpty else { return }
+        clipboard = sel
+        let texts = sel.compactMap(\.text).filter { !$0.isEmpty }
+        if !texts.isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(texts.joined(separator: "\n"), forType: .string)
+        }
+    }
+
+    /// Paste in-app elements (offset), or system-clipboard text as a text box.
+    private func paste() {
+        scene.beginEdit()
+        if !clipboard.isEmpty {
+            var newIds: [String] = []
+            for var e in clipboard {
+                e.id = UUID().uuidString
+                e.x += 20; e.y += 20
+                e.version = 1
+                e.startBindingId = nil; e.endBindingId = nil // copies aren't linked
+                scene.add(e)
+                newIds.append(e.id)
+            }
+            // Offset the buffer so repeated pastes cascade.
+            clipboard = clipboard.map { var c = $0; c.x += 20; c.y += 20; return c }
+            scene.selection = Set(newIds)
+        } else if let str = NSPasteboard.general.string(forType: .string), !str.isEmpty {
+            let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+            let size = controller.style.fontSize
+            let font = Fonts.handDrawn(size: CGFloat(size))
+            let lines = str.components(separatedBy: "\n")
+            let width = lines.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 80
+            var e = makeElement(type: "text", x: center.x, y: center.y, width: 0, height: 0)
+            e.text = str
+            e.fontSize = size
+            e.fontFamily = 5
+            e.strokeColor = controller.style.strokeColor
+            e.width = Double(width) + 8
+            e.height = size * 1.25 * Double(lines.count)
+            scene.add(e)
+            scene.selection = [e.id]
+        }
+        updateSelectionState()
+    }
+
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {
@@ -490,9 +544,16 @@ final class CanvasView: NSView {
 
         let cmd = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
-        if cmd, event.charactersIgnoringModifiers == "z" {
-            shift ? scene.redo() : scene.undo()
-            renderer.invalidateAll(); updateSelectionState(); return
+        if cmd, let ch = event.charactersIgnoringModifiers {
+            switch ch {
+            case "z": shift ? scene.redo() : scene.undo()
+                      renderer.invalidateAll(); updateSelectionState(); return
+            case "c": copySelection(); return
+            case "x": copySelection(); deleteSelectionAction(); return
+            case "v": paste(); return
+            case "a": scene.selection = Set(scene.elements.map(\.id)); updateSelectionState(); needsDisplay = true; return
+            default: break
+            }
         }
         switch event.keyCode {
         case 51, 117: deleteSelectionAction(); return // delete / fwd-delete
@@ -542,10 +603,20 @@ final class CanvasView: NSView {
         presentTextEditor(for: e)
     }
 
+    /// Edit an existing text element in place (double-click).
+    private func beginEditingText(_ e: Element) {
+        scene.beginEdit()
+        scene.selection = [e.id]
+        updateSelectionState()
+        presentTextEditor(for: e)
+    }
+
     private func presentTextEditor(for e: Element) {
         let viewOrigin = camera.sceneToView(CGPoint(x: e.x, y: e.y))
         let size = CGFloat(e.fontSize ?? 20) * camera.zoom
-        let field = NSTextField(frame: NSRect(x: viewOrigin.x, y: viewOrigin.y, width: 240, height: size + 8))
+        let field = NSTextField(frame: NSRect(x: viewOrigin.x, y: viewOrigin.y,
+                                              width: max(240, e.width * camera.zoom + 40), height: size + 8))
+        field.stringValue = e.text ?? ""
         field.font = Fonts.handDrawn(size: size)
         field.isBordered = false
         field.drawsBackground = true
@@ -556,6 +627,7 @@ final class CanvasView: NSView {
         field.action = #selector(textCommitted)
         addSubview(field)
         window?.makeFirstResponder(field)
+        field.currentEditor()?.selectedRange = NSRange(location: (e.text ?? "").count, length: 0)
         textField = field
         editingTextId = e.id
     }
