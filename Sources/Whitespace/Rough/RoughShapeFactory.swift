@@ -48,6 +48,23 @@ enum RoughShapeFactory {
         return polygon(pts, style: style)
     }
 
+    static func roundedRectangle(_ rect: CGRect, style: RoughStyle) -> RoughDrawable {
+        let r = min(min(rect.width, rect.height) * 0.25, 32)
+        guard r > 1 else { return rectangle(rect, style: style) }
+        func arc(_ cx: CGFloat, _ cy: CGFloat, _ from: CGFloat, _ to: CGFloat) -> [CGPoint] {
+            (0...4).map { i in
+                let a = (from + (to - from) * CGFloat(i) / 4) * .pi / 180
+                return CGPoint(x: cx + r * cos(a), y: cy + r * sin(a))
+            }
+        }
+        var pts: [CGPoint] = []
+        pts += arc(rect.minX + r, rect.minY + r, 180, 270)
+        pts += arc(rect.maxX - r, rect.minY + r, 270, 360)
+        pts += arc(rect.maxX - r, rect.maxY - r, 0, 90)
+        pts += arc(rect.minX + r, rect.maxY - r, 90, 180)
+        return polygon(pts, style: style)
+    }
+
     static func diamond(_ rect: CGRect, style: RoughStyle) -> RoughDrawable {
         let pts = [
             CGPoint(x: rect.midX, y: rect.minY),

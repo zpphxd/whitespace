@@ -110,6 +110,18 @@ final class Scene {
         notify()
     }
 
+    func sendBackward(_ id: String) {
+        guard let i = index(of: id), i > 0 else { return }
+        elements.swapAt(i, i - 1)
+        notify()
+    }
+
+    func bringForward(_ id: String) {
+        guard let i = index(of: id), i < elements.count - 1 else { return }
+        elements.swapAt(i, i + 1)
+        notify()
+    }
+
     /// Topmost element hit by a scene-space point.
     func hitTest(_ p: CGPoint, tolerance: CGFloat) -> Element? {
         for e in elements.reversed() where !e.locked {

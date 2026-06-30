@@ -42,7 +42,8 @@ final class ElementRenderer {
             drawFreehand(e, color: stroke, opacity: opacity, in: ctx)
         default:
             let drawable = drawable(for: e)
-            RoughRenderer.draw(drawable, stroke: stroke, fill: fill, opacity: opacity, in: ctx)
+            RoughRenderer.draw(drawable, stroke: stroke, fill: fill, opacity: opacity,
+                               strokeStyle: e.strokeStyle, in: ctx)
             if e.type == "arrow" { drawArrowheads(e, color: stroke, opacity: opacity, in: ctx) }
         }
     }
@@ -62,7 +63,10 @@ final class ElementRenderer {
         case "ellipse": drawable = RoughShapeFactory.ellipse(e.rect, style: style)
         case "diamond": drawable = RoughShapeFactory.diamond(e.rect, style: style)
         case "line", "arrow": drawable = RoughShapeFactory.line(e.absolutePoints, style: style)
-        default: drawable = RoughShapeFactory.rectangle(e.rect, style: style)
+        default:
+            drawable = e.roundness != nil
+                ? RoughShapeFactory.roundedRectangle(e.rect, style: style)
+                : RoughShapeFactory.rectangle(e.rect, style: style)
         }
         cache[e.id] = CacheEntry(version: e.version, drawable: drawable)
         return drawable
@@ -102,20 +106,45 @@ final class ElementRenderer {
     private func drawArrowheads(_ e: Element, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
         let pts = e.absolutePoints
         guard pts.count >= 2 else { return }
-        let end = pts[pts.count - 1], prev = pts[pts.count - 2]
-        let angle = atan2(end.y - prev.y, end.x - prev.x)
-        let len: CGFloat = max(12, e.strokeWidth * 5)
+        if let end = e.endArrowhead {
+            let tip = pts[pts.count - 1], prev = pts[pts.count - 2]
+            drawArrowhead(end, at: tip, angle: atan2(tip.y - prev.y, tip.x - prev.x),
+                          width: e.strokeWidth, color: color, opacity: opacity, in: ctx)
+        }
+        if let start = e.startArrowhead {
+            let tip = pts[0], next = pts[1]
+            drawArrowhead(start, at: tip, angle: atan2(tip.y - next.y, tip.x - next.x),
+                          width: e.strokeWidth, color: color, opacity: opacity, in: ctx)
+        }
+    }
+
+    /// Draw one arrowhead at `tip`, pointing along `angle`.
+    private func drawArrowhead(_ type: String, at tip: CGPoint, angle: CGFloat,
+                               width: Double, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
+        let len: CGFloat = max(12, width * 5)
         let spread: CGFloat = .pi / 7
-        let p1 = CGPoint(x: end.x - len * cos(angle - spread), y: end.y - len * sin(angle - spread))
-        let p2 = CGPoint(x: end.x - len * cos(angle + spread), y: end.y - len * sin(angle + spread))
         ctx.saveGState()
         ctx.setAlpha(opacity)
         ctx.setStrokeColor(color.cgColor)
-        ctx.setLineWidth(e.strokeWidth)
+        ctx.setFillColor(color.cgColor)
+        ctx.setLineWidth(width)
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
-        ctx.move(to: p1); ctx.addLine(to: end); ctx.addLine(to: p2)
-        ctx.strokePath()
+        let p1 = CGPoint(x: tip.x - len * cos(angle - spread), y: tip.y - len * sin(angle - spread))
+        let p2 = CGPoint(x: tip.x - len * cos(angle + spread), y: tip.y - len * sin(angle + spread))
+        switch type {
+        case "triangle":
+            ctx.move(to: tip); ctx.addLine(to: p1); ctx.addLine(to: p2); ctx.closePath(); ctx.fillPath()
+        case "dot":
+            let r = max(3, width * 1.6)
+            ctx.fillEllipse(in: CGRect(x: tip.x - r, y: tip.y - r, width: r * 2, height: r * 2))
+        case "bar":
+            let b1 = CGPoint(x: tip.x - len * 0.6 * cos(angle + .pi / 2), y: tip.y - len * 0.6 * sin(angle + .pi / 2))
+            let b2 = CGPoint(x: tip.x + len * 0.6 * cos(angle + .pi / 2), y: tip.y + len * 0.6 * sin(angle + .pi / 2))
+            ctx.move(to: b1); ctx.addLine(to: b2); ctx.strokePath()
+        default: // "arrow" — open V
+            ctx.move(to: p1); ctx.addLine(to: tip); ctx.addLine(to: p2); ctx.strokePath()
+        }
         ctx.restoreGState()
     }
 

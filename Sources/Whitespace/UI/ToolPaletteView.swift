@@ -158,43 +158,102 @@ struct ToolPaletteView: View {
         }
     }
 
+    /// Element type the inspector should reflect: the selection, else the tool.
+    private var contextType: String { controller.selectionType ?? controller.tool.rawValue }
+    private var showsFill: Bool { ["rectangle", "diamond", "ellipse", "line"].contains(contextType) }
+    private var isArrow: Bool { contextType == "arrow" }
+    private var isText: Bool { contextType == "text" }
+    private var isStrokable: Bool { contextType != "text" && contextType != "file" }
+
     private var inspector: some View {
         VStack(alignment: .leading, spacing: 12) {
-            section("Stroke") {
-                swatchRow(strokeSwatches, selected: controller.style.strokeColor) {
-                    controller.style.strokeColor = $0; apply()
+            Group {
+                section("Stroke") {
+                    swatchRow(strokeSwatches, selected: controller.style.strokeColor) {
+                        controller.style.strokeColor = $0; apply()
+                    }
+                }
+                if showsFill {
+                    section("Background") {
+                        swatchRow(bgSwatches, selected: controller.style.backgroundColor) {
+                            controller.style.backgroundColor = $0; apply()
+                        }
+                    }
+                    section("Fill") {
+                        Picker("", selection: Binding<FillStyle>(
+                            get: { controller.style.fillStyle },
+                            set: { controller.style.fillStyle = $0; apply() })) {
+                            ForEach(FillStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
-            section("Background") {
-                swatchRow(bgSwatches, selected: controller.style.backgroundColor) {
-                    controller.style.backgroundColor = $0; apply()
+            Group {
+                if isStrokable {
+                    section("Stroke width") {
+                        Slider(value: Binding(
+                            get: { controller.style.strokeWidth },
+                            set: { controller.style.strokeWidth = $0; apply() }), in: 1...8)
+                    }
+                    section("Stroke style") {
+                        Picker("", selection: Binding<StrokeStyle>(
+                            get: { controller.style.strokeStyle },
+                            set: { controller.style.strokeStyle = $0; apply() })) {
+                            Text("Solid").tag(StrokeStyle.solid)
+                            Text("Dashed").tag(StrokeStyle.dashed)
+                            Text("Dotted").tag(StrokeStyle.dotted)
+                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                    }
+                    section("Sloppiness") {
+                        Picker("", selection: Binding<Double>(
+                            get: { controller.style.roughness },
+                            set: { controller.style.roughness = $0; apply() })) {
+                            Text("Architect").tag(0.0)
+                            Text("Artist").tag(1.0)
+                            Text("Cartoonist").tag(2.0)
+                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                    }
                 }
             }
-            section("Fill") {
-                Picker("", selection: Binding<FillStyle>(
-                    get: { controller.style.fillStyle },
-                    set: { controller.style.fillStyle = $0; apply() })) {
-                    ForEach(FillStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if contextType == "rectangle" {
+                    section("Edges") {
+                        Picker("", selection: Binding<Bool>(
+                            get: { controller.style.rounded },
+                            set: { controller.style.rounded = $0; apply() })) {
+                            Text("Sharp").tag(false)
+                            Text("Round").tag(true)
+                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                    }
+                }
+                if isArrow {
+                    section("Arrow type") {
+                        Picker("", selection: Binding<Bool>(
+                            get: { controller.style.elbowArrow },
+                            set: { controller.style.elbowArrow = $0; apply() })) {
+                            Text("Straight").tag(false)
+                            Text("Elbow").tag(true)
+                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                    }
+                    section("Arrowheads") {
+                        HStack(spacing: 8) {
+                            arrowheadPicker(start: true)
+                            arrowheadPicker(start: false)
+                        }
+                    }
+                }
+                if isText {
+                    section("Text size — \(Int(controller.style.fontSize)) pt") {
+                        Slider(value: Binding(
+                            get: { controller.style.fontSize },
+                            set: { controller.style.fontSize = $0; apply() }), in: 8...72)
+                    }
+                }
             }
-            section("Stroke width") {
+            section("Opacity — \(Int(controller.style.opacity))") {
                 Slider(value: Binding(
-                    get: { controller.style.strokeWidth },
-                    set: { controller.style.strokeWidth = $0; apply() }), in: 1...8)
-            }
-            section("Roughness") {
-                Picker("", selection: Binding<Double>(
-                    get: { controller.style.roughness },
-                    set: { controller.style.roughness = $0; apply() })) {
-                    Text("Architect").tag(0.0)
-                    Text("Artist").tag(1.0)
-                    Text("Cartoonist").tag(2.0)
-                }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
-            }
-            section("Text size — \(Int(controller.style.fontSize)) pt") {
-                Slider(value: Binding(
-                    get: { controller.style.fontSize },
-                    set: { controller.style.fontSize = $0; apply() }), in: 8...72)
+                    get: { controller.style.opacity },
+                    set: { controller.style.opacity = $0; apply() }), in: 0...100)
             }
             bottomBar
         }
@@ -210,17 +269,24 @@ struct ToolPaletteView: View {
     }
 
     private var bottomBar: some View {
-        HStack {
+        HStack(spacing: 6) {
             Button { controller.clearBoardAction?() } label: {
                 Label("Clear", systemImage: "eraser")
             }
             Spacer()
             if controller.hasSelection {
-                Button { controller.sendSelectionToBack?() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
-                Button { controller.bringSelectionToFront?() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+                Button { controller.sendSelectionToBack?() } label: { Image(systemName: "arrow.down.to.line") }
+                    .help("Send to back")
+                Button { controller.sendSelectionBackward?() } label: { Image(systemName: "arrow.down") }
+                    .help("Send backward")
+                Button { controller.bringSelectionForward?() } label: { Image(systemName: "arrow.up") }
+                    .help("Bring forward")
+                Button { controller.bringSelectionToFront?() } label: { Image(systemName: "arrow.up.to.line") }
+                    .help("Bring to front")
             }
         }
         .buttonStyle(.bordered)
+        .controlSize(.small)
         .padding(.top, 4)
     }
 
@@ -251,6 +317,22 @@ struct ToolPaletteView: View {
 
     private func hexInt(_ s: String) -> Int {
         Int(s.replacingOccurrences(of: "#", with: ""), radix: 16) ?? 0x1e1e1e
+    }
+
+    private func arrowheadPicker(start: Bool) -> some View {
+        Picker("", selection: Binding<String>(
+            get: { start ? controller.style.startArrowhead : controller.style.endArrowhead },
+            set: {
+                if start { controller.style.startArrowhead = $0 } else { controller.style.endArrowhead = $0 }
+                apply()
+            })) {
+            Text(start ? "Start: none" : "End: none").tag("none")
+            Text("Arrow").tag("arrow")
+            Text("Triangle").tag("triangle")
+            Text("Dot").tag("dot")
+            Text("Bar").tag("bar")
+        }
+        .labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity)
     }
 
     private func commitRename(_ i: Int) {

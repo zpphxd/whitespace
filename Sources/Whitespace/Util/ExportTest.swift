@@ -5,13 +5,16 @@ import AppKit
 enum ExportTest {
     static func run(to dir: String) {
         var elements: [Element] = []
-        elements.append(Element(type: "rectangle", x: 60, y: 60, width: 160, height: 100,
-                                backgroundColor: "#a5d8ff", fillStyle: .hachure, seed: 7))
+        var rrect = Element(type: "rectangle", x: 60, y: 60, width: 160, height: 100,
+                            backgroundColor: "#a5d8ff", fillStyle: .hachure, strokeStyle: .dashed, seed: 7)
+        rrect.roundness = Element.Roundness(type: 3)   // rounded + dashed
+        elements.append(rrect)
         elements.append(Element(type: "ellipse", x: 280, y: 70, width: 150, height: 90,
-                                backgroundColor: "#b2f2bb", fillStyle: .solid, seed: 8))
+                                backgroundColor: "#b2f2bb", fillStyle: .solid, strokeStyle: .dotted, seed: 8))
         // Straight bound arrow from rect → ellipse, routed to their edges.
         let rectId = elements[0].id, ellId = elements[1].id
-        var arrow = Element(type: "arrow", x: 0, y: 0, seed: 9, endArrowhead: "arrow",
+        var arrow = Element(type: "arrow", x: 0, y: 0, seed: 9,
+                            startArrowhead: "dot", endArrowhead: "triangle",
                             startBindingId: rectId, endBindingId: ellId)
         arrow.points = [[0, 0], [1, 1]]
         // edge points: rect center→ell center and back

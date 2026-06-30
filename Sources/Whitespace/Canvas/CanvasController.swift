@@ -30,4 +30,9 @@ final class CanvasController: ObservableObject {
     var deleteSelection: (() -> Void)?
     var bringSelectionToFront: (() -> Void)?
     var sendSelectionToBack: (() -> Void)?
+    var bringSelectionForward: (() -> Void)?
+    var sendSelectionBackward: (() -> Void)?
+
+    /// Type of the current selection (or nil) so the inspector can adapt.
+    @Published var selectionType: String?
 }

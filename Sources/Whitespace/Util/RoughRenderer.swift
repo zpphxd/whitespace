@@ -5,7 +5,8 @@ import CoreGraphics
 /// (solid region or sketchy hachure strokes), then the outline on top.
 enum RoughRenderer {
     static func draw(_ d: RoughDrawable, stroke: NSColor, fill: NSColor?,
-                     opacity: CGFloat = 1, in ctx: CGContext) {
+                     opacity: CGFloat = 1, strokeStyle: StrokeStyle = .solid,
+                     in ctx: CGContext) {
         ctx.saveGState()
         ctx.setAlpha(opacity)
 
@@ -26,7 +27,17 @@ enum RoughRenderer {
         ctx.setStrokeColor(stroke.cgColor)
         ctx.setLineWidth(d.strokeWidth)
         ctx.setLineJoin(.round)
-        ctx.setLineCap(.round)
+        // Dash the outline per stroke style (fill stays solid).
+        switch strokeStyle {
+        case .solid:
+            ctx.setLineCap(.round)
+        case .dashed:
+            ctx.setLineCap(.butt)
+            ctx.setLineDash(phase: 0, lengths: [d.strokeWidth * 3 + 2, d.strokeWidth * 2.5 + 2])
+        case .dotted:
+            ctx.setLineCap(.round)
+            ctx.setLineDash(phase: 0, lengths: [0.01, d.strokeWidth * 2])
+        }
         ctx.strokePath()
 
         ctx.restoreGState()

@@ -28,15 +28,19 @@ enum Settings {
         set { defaults.set(newValue, forKey: Key.keepIcons) }
     }
 
+    // NOTE: read with `double(forKey:)` — `object(forKey:) as? CGFloat` fails to
+    // cast the stored NSNumber, so it always returned the default (the bug where
+    // the gear's "When idle" setting never seemed to change).
+
     /// Backdrop opacity when not editing. 0 = drawings float on the wallpaper.
     static var idleBoardOpacity: CGFloat {
-        get { defaults.object(forKey: Key.idleOpacity) as? CGFloat ?? 0.0 }
-        set { defaults.set(newValue, forKey: Key.idleOpacity) }
+        get { defaults.object(forKey: Key.idleOpacity) == nil ? 0.0 : CGFloat(defaults.double(forKey: Key.idleOpacity)) }
+        set { defaults.set(Double(newValue), forKey: Key.idleOpacity) }
     }
 
     /// Backdrop opacity while editing. A light wash so it reads as a canvas.
     static var editBoardOpacity: CGFloat {
-        get { defaults.object(forKey: Key.editOpacity) as? CGFloat ?? 0.85 }
-        set { defaults.set(newValue, forKey: Key.editOpacity) }
+        get { defaults.object(forKey: Key.editOpacity) == nil ? 0.85 : CGFloat(defaults.double(forKey: Key.editOpacity)) }
+        set { defaults.set(Double(newValue), forKey: Key.editOpacity) }
     }
 }

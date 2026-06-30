@@ -78,6 +78,16 @@ final class CanvasView: NSView {
             self.scene.beginEdit()
             self.scene.selection.forEach { self.scene.sendToBack($0) }
         }
+        controller.bringSelectionForward = { [weak self] in
+            guard let self else { return }
+            self.scene.beginEdit()
+            self.scene.selection.forEach { self.scene.bringForward($0) }
+        }
+        controller.sendSelectionBackward = { [weak self] in
+            guard let self else { return }
+            self.scene.beginEdit()
+            self.scene.selection.forEach { self.scene.sendBackward($0) }
+        }
     }
 
     // MARK: Drawing
@@ -198,8 +208,9 @@ final class CanvasView: NSView {
             beginText(at: p)
         } else if tool == .freedraw {
             beginFreedraw(at: p)
-        } else if tool == .line || tool == .arrow || tool == .elbow {
-            beginLine(at: p, type: tool == .line ? "line" : "arrow", elbow: tool == .elbow)
+        } else if tool == .line || tool == .arrow {
+            beginLine(at: p, type: tool == .line ? "line" : "arrow",
+                      elbow: tool == .arrow && controller.style.elbowArrow)
         } else {
             beginShape(at: p, type: tool.rawValue)
         }
@@ -334,7 +345,10 @@ final class CanvasView: NSView {
 
     private func beginShape(at p: CGPoint, type: String) {
         scene.beginEdit()
-        let e = makeElement(type: type, x: p.x, y: p.y, width: 0, height: 0)
+        var e = makeElement(type: type, x: p.x, y: p.y, width: 0, height: 0)
+        if type == "rectangle" || type == "diamond" {
+            e.roundness = controller.style.rounded ? Element.Roundness(type: 3) : nil
+        }
         scene.add(e)
         drag = .create(id: e.id)
     }
@@ -345,7 +359,11 @@ final class CanvasView: NSView {
         e.points = [[0, 0], [0, 0]]
         e.backgroundColor = "transparent"
         e.elbowed = elbow
-        if type == "arrow" { e.endArrowhead = "arrow" }
+        if type == "arrow" {
+            let s = controller.style
+            e.startArrowhead = s.startArrowhead == "none" ? nil : s.startArrowhead
+            e.endArrowhead = s.endArrowhead == "none" ? nil : s.endArrowhead
+        }
         scene.add(e)
         drag = .line(id: e.id)
     }
@@ -543,6 +561,7 @@ final class CanvasView: NSView {
 
     private func updateSelectionState() {
         controller.hasSelection = !scene.selection.isEmpty
+        controller.selectionType = scene.selection.first.flatMap { scene.element($0)?.type }
         // Reflect the (first) selected element's style into the inspector.
         if let id = scene.selection.first, let e = scene.element(id) {
             controller.style.strokeColor = e.strokeColor
@@ -553,6 +572,10 @@ final class CanvasView: NSView {
             controller.style.roughness = e.roughness
             controller.style.opacity = e.opacity
             if let fs = e.fontSize { controller.style.fontSize = fs }
+            controller.style.rounded = e.roundness != nil
+            controller.style.elbowArrow = e.elbowed
+            controller.style.startArrowhead = e.startArrowhead ?? "none"
+            controller.style.endArrowhead = e.endArrowhead ?? "none"
         }
     }
 
@@ -569,6 +592,14 @@ final class CanvasView: NSView {
                 e.strokeStyle = s.strokeStyle
                 e.roughness = s.roughness
                 e.opacity = s.opacity
+                if e.type == "rectangle" || e.type == "diamond" {
+                    e.roundness = s.rounded ? Element.Roundness(type: 3) : nil
+                }
+                if e.type == "arrow" {
+                    e.elbowed = s.elbowArrow
+                    e.startArrowhead = s.startArrowhead == "none" ? nil : s.startArrowhead
+                    e.endArrowhead = s.endArrowhead == "none" ? nil : s.endArrowhead
+                }
                 if e.type == "text" {
                     e.fontSize = s.fontSize
                     let font = Fonts.handDrawn(size: CGFloat(s.fontSize))
@@ -578,6 +609,7 @@ final class CanvasView: NSView {
                 }
             }
             renderer.invalidate(id)
+            if let el = scene.element(id), el.type == "arrow" || el.type == "line" { rebuildArrow(id) }
         }
         // If a text element is being edited live, reflect color/size in the field.
         if let id = editingTextId, scene.selection.contains(id), let field = textField {
