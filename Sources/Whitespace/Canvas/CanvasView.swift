@@ -13,7 +13,11 @@ final class CanvasView: NSView {
     private var camera = Camera()
 
     var isEditing = false {
-        didSet { needsDisplay = true; if !isEditing { commitText() } }
+        didSet {
+            needsDisplay = true
+            if !isEditing { commitText(); commitCellEdit() }
+            updatePipeAnimation()
+        }
     }
 
     /// Called after any scene mutation so the app can schedule an autosave.
@@ -59,6 +63,14 @@ final class CanvasView: NSView {
 
     private var textField: NSTextField?
     private var editingTextId: String?
+    private var cellScroll: NSScrollView?
+    private var cellEditor: NSTextView?
+    private var editingCellId: String?
+    private var runningCells: Set<String> = []
+    private var pipeTimer: Timer?
+    private var pipePulses: [String: Double] = [:]
+    private var graphOrder: [String] = []
+    private var graphOutputs: [String: String] = [:]
     private var clipboard: [Element] = []
 
     init(frame: NSRect, scene: Scene, controller: CanvasController) {
@@ -68,6 +80,7 @@ final class CanvasView: NSView {
         scene.onChange = { [weak self] in
             self?.needsDisplay = true
             self?.onSceneChange?()
+            self?.updatePipeAnimation()
         }
         registerForDraggedTypes([.fileURL])
         wireController()
@@ -371,12 +384,14 @@ final class CanvasView: NSView {
         guard isEditing else { return }
         window?.makeFirstResponder(self)
         commitText()
+        commitCellEdit()
         let p = scenePoint(event)
 
         // Double-click: open a linked element, edit a text element, or start a
         // new text box on empty canvas.
         if event.clickCount == 2 {
             if let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) {
+                if hit.type == "cell" { beginEditingCell(hit); return }
                 if let link = hit.link, !link.isEmpty { openLink(link); return }
                 if hit.type == "text" { beginEditingText(hit); return }
                 if ["rectangle", "ellipse", "diamond"].contains(hit.type) {
@@ -385,6 +400,12 @@ final class CanvasView: NSView {
             }
             beginText(at: p)
             return
+        }
+
+        // Single click on a cell's run glyph (top-right of the header) runs it.
+        if controller.tool == .select, let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
+           hit.type == "cell", cellRunHitRect(hit).contains(p) {
+            runCell(hit.id); return
         }
 
         dragStart = p
@@ -718,7 +739,7 @@ final class CanvasView: NSView {
         updateSelectionState()  // stay on the current tool for repeated drawing
     }
 
-    private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image"]
+    private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image", "cell"]
 
     private func topShape(at p: CGPoint, excluding excludeId: String, tolerance: CGFloat = 4) -> Element? {
         for e in scene.elements.reversed()
@@ -846,6 +867,7 @@ final class CanvasView: NSView {
         renderer.invalidateAll()
         commitText()
         updateSelectionState()
+        updatePipeAnimation()
         needsDisplay = true
     }
 
@@ -1151,6 +1173,23 @@ final class CanvasView: NSView {
     // Cmd-shortcuts arrive here (not keyDown). Without an app menu they'd
     // otherwise be dropped. Returning true marks them handled.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // While a text/code editor is focused, route clipboard + select-all +
+        // undo to it (the canvas otherwise grabs ⌘C/V/X/A/Z for elements, and
+        // there's no Edit menu to dispatch them, so paste would do nothing).
+        if event.modifierFlags.contains(.command),
+           let editor = window?.firstResponder as? NSText {
+            switch event.charactersIgnoringModifiers {
+            case "v": editor.paste(nil); return true
+            case "c": editor.copy(nil); return true
+            case "x": editor.cut(nil); return true
+            case "a": editor.selectAll(nil); return true
+            case "z":
+                if event.modifierFlags.contains(.shift) { editor.undoManager?.redo() }
+                else { editor.undoManager?.undo() }
+                return true
+            default: break
+            }
+        }
         guard isEditing, event.modifierFlags.contains(.command) else {
             return super.performKeyEquivalent(with: event)
         }
@@ -1164,6 +1203,7 @@ final class CanvasView: NSView {
         case "a": scene.selection = Set(scene.elements.map(\.id))
                   updateSelectionState(); needsDisplay = true; return true
         case "g": shift ? ungroupSelection() : groupSelection(); needsDisplay = true; return true
+        case "\r": shift ? runGraph() : runSelectedCell(); return true   // ⌘↵ cell, ⌘⇧↵ whole graph
         default: return super.performKeyEquivalent(with: event)
         }
     }
@@ -1322,6 +1362,221 @@ final class CanvasView: NSView {
         textField = nil
         editingTextId = nil
         controller.tool = .select
+        needsDisplay = true
+    }
+
+    // MARK: Live cells
+
+    private static func starterCode(_ lang: String) -> String {
+        switch lang {
+        case "python": return "import platform\nprint('Hello from', platform.system())\nprint('squares:', [x*x for x in range(8)])"
+        case "javascript": return "console.log('Hello from Node', process.version)"
+        case "ruby": return "puts \"Hello from Ruby #{RUBY_VERSION}\""
+        default: return "echo \"Hello from Whitespace\"\ndate \"+%A %H:%M\""
+        }
+    }
+
+    /// Drop a runnable cell at the view center.
+    func insertCell(language: String = "shell") {
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "cell", x: center.x - 230, y: center.y - 110, width: 460, height: 220)
+        e.cellLanguage = language
+        e.text = Self.starterCode(language)
+        e.backgroundColor = "transparent"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
+    /// The scene-space hit area for a cell's run glyph (header, top-right).
+    private func cellRunHitRect(_ e: Element) -> CGRect {
+        let r = e.rect
+        return CGRect(x: r.maxX - 38, y: r.minY, width: 38, height: 28)
+    }
+
+    private func runSelectedCell() {
+        if let id = editingCellId { commitCellEdit(); runCell(id); return }
+        if let id = scene.selection.first(where: { scene.element($0)?.type == "cell" }) { runCell(id) }
+    }
+
+    /// Run one cell, piping its upstream cells' current output into its stdin.
+    private func runCell(_ id: String) {
+        guard let e = scene.element(id), e.type == "cell" else { return }
+        let ups = incomingCells(of: id)
+        let input = ups.map { scene.element($0)?.cellOutput ?? "" }.joined(separator: "\n")
+        ups.forEach { pulsePipe(from: $0, to: id) }
+        runningCells.insert(id)
+        scene.update(id: id) { $0.cellOutput = "running…" }
+        renderer.invalidate(id); needsDisplay = true
+        CellRunner.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.runningCells.remove(id)
+                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.renderer.invalidate(id)
+                self.needsDisplay = true
+                self.onSceneChange?()
+            }
+        }
+    }
+
+    // MARK: Dataflow graph
+
+    private func cellIdSet() -> Set<String> { Set(scene.elements.filter { $0.type == "cell" }.map(\.id)) }
+
+    /// Upstream cell ids feeding `id` (arrows bound cell→cell ending at `id`).
+    private func incomingCells(of id: String) -> [String] {
+        let cells = cellIdSet()
+        return scene.elements.compactMap { a in
+            guard a.type == "arrow" || a.type == "line", a.endBindingId == id,
+                  let s = a.startBindingId, cells.contains(s) else { return nil }
+            return s
+        }
+    }
+
+    private func pipeArrowId(from: String, to: String) -> String? {
+        scene.elements.first {
+            ($0.type == "arrow" || $0.type == "line") && $0.startBindingId == from && $0.endBindingId == to
+        }?.id
+    }
+
+    /// Kick a data pulse along the pipe from `from` to `to`.
+    private func pulsePipe(from: String, to: String) {
+        guard let aid = pipeArrowId(from: from, to: to) else { return }
+        pipePulses[aid] = 0.0001
+        renderer.pipePulses = pipePulses.mapValues { CGFloat($0) }
+        updatePipeAnimation()
+        needsDisplay = true
+    }
+
+    /// Run the whole graph: every cell in topological order, piping each cell's
+    /// output into its downstream cells' stdin (⌘⇧↵).
+    func runGraph() {
+        let cells = cellIdSet()
+        guard !cells.isEmpty else { return }
+        var edges: [(String, String)] = []
+        for a in scene.elements where a.type == "arrow" || a.type == "line" {
+            if let s = a.startBindingId, let t = a.endBindingId, cells.contains(s), cells.contains(t) {
+                edges.append((s, t))
+            }
+        }
+        graphOrder = Self.topoSort(Array(cells), edges)
+        graphOutputs = [:]
+        runGraphStep(0)
+    }
+
+    private static func topoSort(_ nodes: [String], _ edges: [(String, String)]) -> [String] {
+        var indeg = Dictionary(uniqueKeysWithValues: nodes.map { ($0, 0) })
+        var adj: [String: [String]] = [:]
+        for (s, t) in edges { adj[s, default: []].append(t); indeg[t, default: 0] += 1 }
+        var queue = nodes.filter { indeg[$0] == 0 }
+        var order: [String] = []
+        while !queue.isEmpty {
+            let n = queue.removeFirst(); order.append(n)
+            for m in adj[n] ?? [] { indeg[m]! -= 1; if indeg[m] == 0 { queue.append(m) } }
+        }
+        for n in nodes where !order.contains(n) { order.append(n) }   // cycle leftovers
+        return order
+    }
+
+    private func runGraphStep(_ i: Int) {
+        guard i < graphOrder.count else { needsDisplay = true; return }
+        let id = graphOrder[i]
+        guard let cell = scene.element(id), cell.type == "cell" else { runGraphStep(i + 1); return }
+        let ups = incomingCells(of: id)
+        let input = ups.map { graphOutputs[$0] ?? "" }.joined(separator: "\n")
+        ups.forEach { pulsePipe(from: $0, to: id) }
+        scene.update(id: id) { $0.cellOutput = "running…" }
+        renderer.invalidate(id); needsDisplay = true
+        CellRunner.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.graphOutputs[id] = result.output
+                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.renderer.invalidate(id); self.needsDisplay = true; self.onSceneChange?()
+                // Brief pause so the pulse into the next cell reads clearly.
+                Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.runGraphStep(i + 1) }
+                }
+            }
+        }
+    }
+
+    private func beginEditingCell(_ e: Element) {
+        commitText(); commitCellEdit()
+        scene.selection = [e.id]
+        updateSelectionState()
+        let r = e.rect
+        let topLeft = camera.sceneToView(CGPoint(x: r.minX, y: r.minY + 26))
+        let w = e.width * camera.zoom
+        let codeH = max(60, (e.height - 26) * camera.zoom * 0.62)
+        let scroll = NSScrollView(frame: NSRect(x: topLeft.x, y: topLeft.y, width: w, height: codeH))
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = NSColor(hex: 0x1e1e2e)
+        let tv = CodeTextView(frame: NSRect(origin: .zero, size: scroll.frame.size))
+        tv.string = e.text ?? ""
+        tv.font = NSFont.monospacedSystemFont(ofSize: 12.5 * camera.zoom, weight: .regular)
+        tv.textColor = NSColor(hex: 0xe4e4ef)
+        tv.backgroundColor = NSColor(hex: 0x1e1e2e)
+        tv.insertionPointColor = .white
+        tv.isRichText = false
+        tv.isAutomaticQuoteSubstitutionEnabled = false
+        tv.allowsUndo = true
+        tv.isVerticallyResizable = true
+        tv.textContainerInset = NSSize(width: 6, height: 4)
+        tv.onRun = { [weak self] in self?.runSelectedCell() }
+        scroll.documentView = tv
+        addSubview(scroll)
+        window?.makeFirstResponder(tv)
+        cellScroll = scroll; cellEditor = tv; editingCellId = e.id
+    }
+
+    /// True when any arrow connects two cells (a live data pipe).
+    private func hasLivePipes() -> Bool {
+        let cells = Set(scene.elements.filter { $0.type == "cell" }.map(\.id))
+        guard !cells.isEmpty else { return false }
+        return scene.elements.contains { e in
+            guard e.type == "arrow" || e.type == "line",
+                  let s = e.startBindingId, let t = e.endBindingId else { return false }
+            return cells.contains(s) && cells.contains(t)
+        }
+    }
+
+    /// Run a low-rate timer that animates the marching-ants flow on live pipes,
+    /// only while at least one exists.
+    private func updatePipeAnimation() {
+        let live = hasLivePipes()
+        if live, pipeTimer == nil {
+            pipeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.renderer.pipePhase += 0.9
+                    if !self.pipePulses.isEmpty {
+                        for (k, v) in self.pipePulses {
+                            let nv = v + 0.045
+                            if nv >= 1 { self.pipePulses[k] = nil } else { self.pipePulses[k] = nv }
+                        }
+                        self.renderer.pipePulses = self.pipePulses.mapValues { CGFloat($0) }
+                    }
+                    self.needsDisplay = true
+                }
+            }
+        } else if !live, let t = pipeTimer {
+            t.invalidate(); pipeTimer = nil
+        }
+    }
+
+    private func commitCellEdit() {
+        guard let tv = cellEditor, let id = editingCellId else { return }
+        let value = tv.string
+        scene.update(id: id) { $0.text = value }
+        renderer.invalidate(id)
+        cellScroll?.removeFromSuperview()
+        cellScroll = nil; cellEditor = nil; editingCellId = nil
         needsDisplay = true
     }
 }

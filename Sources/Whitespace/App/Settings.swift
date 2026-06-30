@@ -13,6 +13,7 @@ enum Settings {
         static let keepIcons = "keepDesktopIcons"
         static let linkColor = "linkColor"
         static let linkStyle = "linkStyle"
+        static let stayOnWallpaper = "stayOnWallpaper"
         static let editKeyCode = "editKeyCode", editMods = "editMods"
         static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
     }
@@ -55,6 +56,14 @@ enum Settings {
     static var keepDesktopIcons: Bool {
         get { defaults.bool(forKey: Key.keepIcons) }
         set { defaults.set(newValue, forKey: Key.keepIcons) }
+    }
+
+    /// When true (default), leaving Edit Mode (⌥⌘W) keeps your drawings visible on
+    /// the wallpaper. When false, ⌥⌘W hides the whole canvas — back to a clean
+    /// desktop — and ⌥⌘W brings it all back.
+    static var stayOnWallpaper: Bool {
+        get { defaults.object(forKey: Key.stayOnWallpaper) == nil ? true : defaults.bool(forKey: Key.stayOnWallpaper) }
+        set { defaults.set(newValue, forKey: Key.stayOnWallpaper) }
     }
 
     // NOTE: read with `double(forKey:)` — `object(forKey:) as? CGFloat` fails to

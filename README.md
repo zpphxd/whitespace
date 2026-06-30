@@ -22,6 +22,10 @@ look re-implemented in pure Swift. No web view, no Electron.
 
 ## Features
 
+> 📖 **[Full feature & usage guide → `docs/GUIDE.md`](docs/GUIDE.md)** — every tool,
+> files & Quick Look, frames, boards, **live cells** (runnable code with data pipes),
+> and the complete keyboard-shortcut reference.
+
 - **Desktop-layer canvas** — a borderless `NSWindow` pinned to the desktop; the
   whole desktop becomes your board.
 - **Hand-drawn aesthetic** — a faithful Swift port of the rough.js renderer:
@@ -37,6 +41,15 @@ look re-implemented in pure Swift. No web view, no Electron.
   and double-click to add or edit text.
 - **Link files & notes** — press **/** to Spotlight-search your files and drop a
   linked node; double-click it to open. Works with `obsidian://` and web links.
+- **Finder integration** — drag files/folders in as linked nodes with real
+  **QuickLook thumbnails**, modified date, and a *Missing* badge; **Space** to
+  Quick Look, right-click to Open / Reveal in Finder.
+- **Frames, groups & alignment** — labeled container frames (contents move with
+  them), **⌘G** grouping, and align/distribute for multi-selections.
+- **Boards** — multiple named boards in reorderable tabs; per-board export; autosave.
+- **Live cells** — runnable code nodes (shell/Python/JS/Ruby); connect two cells
+  and the **arrow becomes a live data pipe** that flows output → stdin when you run
+  the graph (**⌘↵** / **⌘⇧↵**).
 - **Export** — to **PNG** (raster) and **SVG** (vector), matching the canvas.
 - **Liquid Glass palette** — native macOS 26 `glassEffect`, docked left.
 - **Excalidraw-compatible** — reads/writes `.excalidraw` JSON; autosaves to

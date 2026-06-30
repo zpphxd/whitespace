@@ -14,6 +14,14 @@ final class ElementRenderer {
     private var cache: [String: CacheEntry] = [:]
     private var imageCache: [String: NSImage] = [:]
 
+    /// Marching-ants phase for live data pipes (advanced by the canvas timer).
+    var pipePhase: CGFloat = 0
+    /// Per-pipe (arrow id → 0…1) progress of a data pulse traveling the pipe.
+    var pipePulses: [String: CGFloat] = [:]
+    /// Ids of cell elements in the scene being drawn (so arrows can tell when
+    /// they connect two cells and should render as a live pipe).
+    private var cellIds: Set<String> = []
+
     func invalidate(_ id: String) { cache.removeValue(forKey: id) }
     func invalidateAll() { cache.removeAll() }
 
@@ -23,10 +31,18 @@ final class ElementRenderer {
         ctx.scaleBy(x: camera.zoom, y: camera.zoom)
         ctx.translateBy(x: -camera.offset.x, y: -camera.offset.y)
 
+        cellIds = Set(scene.elements.filter { $0.type == "cell" }.map(\.id))
         for element in scene.elements where !element.isDeleted {
             draw(element, in: ctx)
         }
         ctx.restoreGState()
+    }
+
+    /// An arrow whose both ends are bound to cells is a live data pipe.
+    private func isLivePipe(_ e: Element) -> Bool {
+        guard e.type == "arrow" || e.type == "line",
+              let s = e.startBindingId, let t = e.endBindingId else { return false }
+        return cellIds.contains(s) && cellIds.contains(t)
     }
 
     private func draw(_ e: Element, in ctx: CGContext) {
@@ -44,6 +60,8 @@ final class ElementRenderer {
         }
         defer { if rotated { ctx.restoreGState() } }
 
+        if isLivePipe(e) { drawLivePipe(e, opacity: opacity, in: ctx); return }
+
         switch e.type {
         case "text":
             drawText(e, color: stroke, opacity: opacity, in: ctx)
@@ -52,7 +70,9 @@ final class ElementRenderer {
         case "image":
             drawImage(e, opacity: opacity, in: ctx)
         case "frame":
-            drawFrame(e, in: ctx)
+            drawFrame(e, opacity: opacity, in: ctx)
+        case "cell":
+            drawCell(e, opacity: opacity, in: ctx)
         case "freedraw":
             drawFreehand(e, color: stroke, opacity: opacity, in: ctx)
         default:
@@ -163,10 +183,164 @@ final class ElementRenderer {
         ctx.restoreGState()
     }
 
+    // MARK: Live data pipe (an arrow connecting two cells)
+
+    private func drawLivePipe(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
+        let pts = e.absolutePoints
+        guard pts.count >= 2 else { return }
+        let accent = NSColor(hex: 0x12b886)
+        ctx.saveGState()
+        ctx.setAlpha(opacity)
+        ctx.setLineCap(.round); ctx.setLineJoin(.round)
+
+        let path = CGMutablePath()
+        path.move(to: pts[0]); for p in pts.dropFirst() { path.addLine(to: p) }
+
+        // Soft glow, solid core, then bright marching dashes to read as "flowing".
+        ctx.addPath(path); ctx.setStrokeColor(accent.withAlphaComponent(0.16).cgColor)
+        ctx.setLineWidth(9); ctx.strokePath()
+        ctx.addPath(path); ctx.setStrokeColor(accent.cgColor)
+        ctx.setLineWidth(3); ctx.strokePath()
+        ctx.addPath(path); ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.92).cgColor)
+        ctx.setLineWidth(2)
+        ctx.setLineDash(phase: -pipePhase, lengths: [5, 9])   // negative → flows toward the end
+        ctx.strokePath()
+        ctx.setLineDash(phase: 0, lengths: [])
+
+        // End ports.
+        ctx.setFillColor(accent.cgColor)
+        for p in [pts.first!, pts.last!] {
+            ctx.fillEllipse(in: CGRect(x: p.x - 4.5, y: p.y - 4.5, width: 9, height: 9))
+        }
+        // Arrowhead at the end, along the last segment.
+        let tip = pts[pts.count - 1], prev = pts[pts.count - 2]
+        let a = atan2(tip.y - prev.y, tip.x - prev.x)
+        let len: CGFloat = 11, spread: CGFloat = .pi / 7
+        let head = CGMutablePath()
+        head.move(to: tip)
+        head.addLine(to: CGPoint(x: tip.x - len * cos(a - spread), y: tip.y - len * sin(a - spread)))
+        head.addLine(to: CGPoint(x: tip.x - len * cos(a + spread), y: tip.y - len * sin(a + spread)))
+        head.closeSubpath()
+        ctx.addPath(head); ctx.setFillColor(accent.cgColor); ctx.fillPath()
+
+        // Data pulse traveling the pipe while it's carrying output.
+        if let prog = pipePulses[e.id], let dot = pointAlong(pts, t: prog) {
+            ctx.setFillColor(NSColor.white.cgColor)
+            ctx.fillEllipse(in: CGRect(x: dot.x - 6, y: dot.y - 6, width: 12, height: 12))
+            ctx.setFillColor(accent.withAlphaComponent(0.5).cgColor)
+            ctx.fillEllipse(in: CGRect(x: dot.x - 10, y: dot.y - 10, width: 20, height: 20))
+        }
+        ctx.restoreGState()
+    }
+
+    /// Point at fractional length `t` (0…1) along a polyline.
+    private func pointAlong(_ pts: [CGPoint], t: CGFloat) -> CGPoint? {
+        guard pts.count >= 2 else { return pts.first }
+        var total: CGFloat = 0
+        var segs: [(CGPoint, CGPoint, CGFloat)] = []
+        for i in 0..<(pts.count - 1) {
+            let d = hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y)
+            segs.append((pts[i], pts[i + 1], d)); total += d
+        }
+        guard total > 0 else { return pts.first }
+        var target = max(0, min(1, t)) * total
+        for (a, b, d) in segs {
+            if target <= d {
+                let f = d > 0 ? target / d : 0
+                return CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+            }
+            target -= d
+        }
+        return pts.last
+    }
+
+    // MARK: Live cell (executable code + output)
+
+    private func drawCell(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
+        let r = e.rect
+        let headerH: CGFloat = 26
+        let hasOutput = !(e.cellOutput ?? "").isEmpty
+        let outputH: CGFloat = hasOutput ? max(40, (r.height - headerH) * 0.42) : 0
+        let codeRect = CGRect(x: r.minX, y: r.minY + headerH, width: r.width,
+                              height: r.height - headerH - outputH)
+
+        ctx.saveGState()
+        ctx.setAlpha(opacity)
+        let card = CGPath(roundedRect: r, cornerWidth: 9, cornerHeight: 9, transform: nil)
+        ctx.addPath(card); ctx.setFillColor(NSColor(hex: 0x1e1e2e).cgColor); ctx.fillPath()
+
+        // Header bar.
+        ctx.saveGState()
+        ctx.addPath(card); ctx.clip()
+        ctx.setFillColor(NSColor(hex: 0x2a2a3c).cgColor)
+        ctx.fill(CGRect(x: r.minX, y: r.minY, width: r.width, height: headerH))
+        ctx.restoreGState()
+        let lang = CellRunner.displayName(e.cellLanguage ?? "shell")
+        drawMono(lang, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
+                 size: 11, color: NSColor(hex: 0x9aa0b4), in: ctx)
+        // Run glyph (green triangle) at the right of the header.
+        let tri = CGRect(x: r.maxX - 26, y: r.minY + 8, width: 11, height: 11)
+        ctx.beginPath()
+        ctx.move(to: CGPoint(x: tri.minX, y: tri.minY))
+        ctx.addLine(to: CGPoint(x: tri.minX, y: tri.maxY))
+        ctx.addLine(to: CGPoint(x: tri.maxX, y: tri.midY))
+        ctx.closePath()
+        ctx.setFillColor(NSColor(hex: 0x40c057).cgColor); ctx.fillPath()
+
+        // Source.
+        drawMonoBlock(e.text ?? "", in: codeRect.insetBy(dx: 12, dy: 8),
+                      size: 12.5, color: NSColor(hex: 0xe4e4ef), in: ctx)
+
+        // Output panel.
+        if hasOutput {
+            let outRect = CGRect(x: r.minX, y: codeRect.maxY, width: r.width, height: outputH)
+            ctx.saveGState(); ctx.addPath(card); ctx.clip()
+            ctx.setFillColor(NSColor(hex: 0x16161f).cgColor); ctx.fill(outRect)
+            ctx.setStrokeColor(NSColor(hex: 0x33334a).cgColor); ctx.setLineWidth(1)
+            ctx.move(to: CGPoint(x: r.minX, y: outRect.minY)); ctx.addLine(to: CGPoint(x: r.maxX, y: outRect.minY)); ctx.strokePath()
+            ctx.restoreGState()
+            drawMonoBlock(e.cellOutput ?? "", in: outRect.insetBy(dx: 12, dy: 7),
+                          size: 11.5, color: NSColor(hex: 0x8de08d), in: ctx)
+        }
+
+        ctx.addPath(card); ctx.setStrokeColor(NSColor(hex: 0x3a3a52).cgColor); ctx.setLineWidth(1); ctx.strokePath()
+        ctx.restoreGState()
+    }
+
+    /// One clipped monospaced line.
+    private func drawMono(_ s: String, in rect: CGRect, size: CGFloat, color: NSColor, in ctx: CGContext) {
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: size, weight: .regular), .foregroundColor: color]))
+        ctx.saveGState(); ctx.clip(to: rect)
+        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        ctx.textPosition = CGPoint(x: rect.minX, y: rect.minY + size)
+        CTLineDraw(line, ctx); ctx.restoreGState()
+    }
+
+    /// Multi-line monospaced text, top-aligned and clipped to `rect`.
+    private func drawMonoBlock(_ s: String, in rect: CGRect, size: CGFloat, color: NSColor, in ctx: CGContext) {
+        guard rect.height > 4 else { return }
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let lineH = size * 1.35
+        ctx.saveGState(); ctx.clip(to: rect)
+        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        var y = rect.minY + size
+        for raw in s.components(separatedBy: "\n") {
+            if y - size > rect.maxY { break }
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: raw, attributes: [
+                .font: font, .foregroundColor: color]))
+            ctx.textPosition = CGPoint(x: rect.minX, y: y)
+            CTLineDraw(line, ctx)
+            y += lineH
+        }
+        ctx.restoreGState()
+    }
+
     // MARK: Frame & embed
 
-    private func drawFrame(_ e: Element, in ctx: CGContext) {
+    private func drawFrame(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
         let r = e.rect
+        ctx.saveGState(); ctx.setAlpha(opacity); defer { ctx.restoreGState() }
         let path = CGPath(roundedRect: r, cornerWidth: 8, cornerHeight: 8, transform: nil)
         ctx.addPath(path); ctx.setFillColor(NSColor.gray.withAlphaComponent(0.04).cgColor); ctx.fillPath()
         ctx.addPath(path); ctx.setStrokeColor(NSColor.gray.withAlphaComponent(0.55).cgColor)

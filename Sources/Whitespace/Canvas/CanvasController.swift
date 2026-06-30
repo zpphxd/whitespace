@@ -21,6 +21,8 @@ final class CanvasController: ObservableObject {
     var linkFileAction: (() -> Void)?
     var linkURLAction: (() -> Void)?
     var insertImageAction: (() -> Void)?
+    var insertCellAction: ((String) -> Void)?
+    var runGraphAction: (() -> Void)?
     var clearBoardAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).
@@ -29,6 +31,7 @@ final class CanvasController: ObservableObject {
     var setKeepIcons: ((Bool) -> Void)?
     var setLinkColorAction: ((String) -> Void)?
     var setLinkStyleAction: ((String) -> Void)?
+    var setStayOnWallpaperAction: ((Bool) -> Void)?
     var openShortcutsAction: (() -> Void)?
 
     /// Set by the canvas; invoked by the inspector to push style onto selection.

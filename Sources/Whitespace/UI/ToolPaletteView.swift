@@ -136,6 +136,12 @@ struct ToolPaletteView: View {
                 Text("Icon + name").tag("icon")
                 Text("Colored text").tag("text")
             }
+            Picker("When hidden (⌥⌘W)", selection: Binding(
+                get: { Settings.stayOnWallpaper },
+                set: { controller.setStayOnWallpaperAction?($0) })) {
+                Text("Stay on wallpaper").tag(true)
+                Text("Hide everything").tag(false)
+            }
             Divider()
             Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
         } label: {
@@ -184,6 +190,14 @@ struct ToolPaletteView: View {
                 Button { controller.tool = .frame } label: { Label(Tool.frame.label, systemImage: Tool.frame.symbol) }
                 Button { controller.tool = .laser } label: { Label(Tool.laser.label, systemImage: Tool.laser.symbol) }
                 Button { controller.tool = .lasso } label: { Label(Tool.lasso.label, systemImage: Tool.lasso.symbol) }
+                Divider()
+                Menu {
+                    Button("Shell") { controller.insertCellAction?("shell") }
+                    Button("Python") { controller.insertCellAction?("python") }
+                    Button("JavaScript") { controller.insertCellAction?("javascript") }
+                    Button("Ruby") { controller.insertCellAction?("ruby") }
+                } label: { Label("Code Cell", systemImage: "chevron.left.forwardslash.chevron.right") }
+                Button { controller.runGraphAction?() } label: { Label("Run Graph (⌘⇧↵)", systemImage: "play.circle") }
             } label: {
                 Image(systemName: "ellipsis.circle").frame(width: 25, height: 26)
             }

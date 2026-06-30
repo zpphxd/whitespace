@@ -18,6 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcuts: ShortcutsWindow!
 
     private var autosaveItem: DispatchWorkItem?
+    private var pendingOpenURL: URL?
+
+    /// Open a `.excalidraw` passed via `open -a Whitespace <file>` (or Finder).
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        let url = URL(fileURLWithPath: filename)
+        guard url.pathExtension.lowercased() == "excalidraw" else { return false }
+        if scene != nil {
+            if !window.isEditing { toggleEdit() }
+            openExcalidraw(url)
+        } else {
+            pendingOpenURL = url   // arrived before setup; open after launch
+        }
+        return true
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let screen = NSScreen.main else { return }
@@ -43,6 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.linkFileAction = { [weak self] in self?.linkFile() }
         controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.insertImageAction = { [weak self] in self?.insertImage() }
+        controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
+        controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setIdleOpacity = { [weak self] v in
             Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
@@ -59,6 +75,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         controller.setLinkStyleAction = { [weak self] style in
             Settings.linkStyle = style; self?.canvas.restyleFileNodes()
+        }
+        controller.setStayOnWallpaperAction = { [weak self] on in
+            Settings.stayOnWallpaper = on
+            guard let self, !self.window.isEditing else { return }
+            on ? self.window.orderFront(nil) : self.window.orderOut(nil)   // apply now if idle
         }
 
         // Catch "/" app-wide (works whichever of our windows is key), except
@@ -114,6 +135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // border appear); otherwise a menu-bar app with a transparent idle
         // board looks like nothing happened.
         toggleEdit()
+
+        if let url = pendingOpenURL { pendingOpenURL = nil; openExcalidraw(url) }
     }
 
     private func registerHotKeys() {
@@ -144,6 +167,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             palette.hide()
             saveNow()
+            // Optionally hide the whole canvas (clean desktop) instead of leaving
+            // the drawings on the wallpaper.
+            if !Settings.stayOnWallpaper { window.orderOut(nil) }
         }
     }
 

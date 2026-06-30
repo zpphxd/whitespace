@@ -55,6 +55,12 @@ struct Element: Codable, Identifiable, Equatable {
     var originalText: String?
     var lineHeight: Double?
 
+    // Live cells (executable code / data). `text` holds the source; these add
+    // the language and the last captured output. Whitespace extension to the
+    // Excalidraw schema — ignored by other tools, tolerated on decode.
+    var cellLanguage: String?
+    var cellOutput: String?
+
     struct Roundness: Codable, Equatable {
         var type: Int
         var value: Double?
@@ -105,7 +111,9 @@ struct Element: Codable, Identifiable, Equatable {
         verticalAlign: String? = nil,
         containerId: String? = nil,
         originalText: String? = nil,
-        lineHeight: Double? = nil
+        lineHeight: Double? = nil,
+        cellLanguage: String? = nil,
+        cellOutput: String? = nil
     ) {
         self.id = id; self.type = type
         self.x = x; self.y = y; self.width = width; self.height = height; self.angle = angle
@@ -123,6 +131,7 @@ struct Element: Codable, Identifiable, Equatable {
         self.text = text; self.fontSize = fontSize; self.fontFamily = fontFamily
         self.textAlign = textAlign; self.verticalAlign = verticalAlign
         self.containerId = containerId; self.originalText = originalText; self.lineHeight = lineHeight
+        self.cellLanguage = cellLanguage; self.cellOutput = cellOutput
     }
 
     // Lenient decoding: tolerate any subset of keys (files from other tools vary).
@@ -170,5 +179,7 @@ struct Element: Codable, Identifiable, Equatable {
         containerId = try? c.decodeIfPresent(String.self, forKey: .containerId)
         originalText = try? c.decodeIfPresent(String.self, forKey: .originalText)
         lineHeight = try? c.decodeIfPresent(Double.self, forKey: .lineHeight)
+        cellLanguage = try? c.decodeIfPresent(String.self, forKey: .cellLanguage)
+        cellOutput = try? c.decodeIfPresent(String.self, forKey: .cellOutput)
     }
 }
