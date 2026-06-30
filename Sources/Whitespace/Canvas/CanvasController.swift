@@ -7,6 +7,7 @@ final class CanvasController: ObservableObject {
     @Published var tool: Tool = .select
     @Published var style = CurrentStyle()
     @Published var hasSelection = false
+    @Published var selectionCount = 0
 
     // Tabs (multiple named whiteboards).
     @Published var tabs: [String] = ["Board 1"]
@@ -37,4 +38,5 @@ final class CanvasController: ObservableObject {
 
     /// Type of the current selection (or nil) so the inspector can adapt.
     @Published var selectionType: String?
+    var alignAction: ((String) -> Void)?
 }

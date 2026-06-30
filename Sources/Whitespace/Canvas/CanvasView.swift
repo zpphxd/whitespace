@@ -133,6 +133,41 @@ final class CanvasView: NSView {
             self.scene.beginEdit()
             self.scene.selection.forEach { self.scene.sendBackward($0) }
         }
+        controller.alignAction = { [weak self] mode in self?.align(mode) }
+    }
+
+    /// Align or distribute the selected elements (≥2).
+    private func align(_ mode: String) {
+        let ids = scene.selection
+        guard ids.count >= 2 else { return }
+        let boxes = scene.elements.filter { ids.contains($0.id) }.map { ($0.id, $0.boundingRect) }
+        let union = boxes.dropFirst().reduce(boxes[0].1) { $0.union($1.1) }
+        scene.beginEdit()
+        func move(_ id: String, dx: CGFloat = 0, dy: CGFloat = 0) {
+            scene.update(id: id) { $0.x += dx; $0.y += dy }
+        }
+        switch mode {
+        case "left": boxes.forEach { move($0.0, dx: union.minX - $0.1.minX) }
+        case "centerH": boxes.forEach { move($0.0, dx: union.midX - $0.1.midX) }
+        case "right": boxes.forEach { move($0.0, dx: union.maxX - $0.1.maxX) }
+        case "top": boxes.forEach { move($0.0, dy: union.minY - $0.1.minY) }
+        case "middleV": boxes.forEach { move($0.0, dy: union.midY - $0.1.midY) }
+        case "bottom": boxes.forEach { move($0.0, dy: union.maxY - $0.1.maxY) }
+        case "distH":
+            let sorted = boxes.sorted { $0.1.midX < $1.1.midX }
+            let lo = sorted.first!.1.midX, hi = sorted.last!.1.midX
+            let step = (hi - lo) / CGFloat(sorted.count - 1)
+            for (i, b) in sorted.enumerated() { move(b.0, dx: lo + CGFloat(i) * step - b.1.midX) }
+        case "distV":
+            let sorted = boxes.sorted { $0.1.midY < $1.1.midY }
+            let lo = sorted.first!.1.midY, hi = sorted.last!.1.midY
+            let step = (hi - lo) / CGFloat(sorted.count - 1)
+            for (i, b) in sorted.enumerated() { move(b.0, dy: lo + CGFloat(i) * step - b.1.midY) }
+        default: break
+        }
+        rebuildArrowsBound(to: ids)
+        syncBoundTexts(to: ids)
+        updateSelectionState()
     }
 
     // MARK: Drawing
@@ -377,6 +412,29 @@ final class CanvasView: NSView {
         }
     }
 
+    /// All element ids sharing the hit element's outermost group (or just it).
+    private func groupMembers(of e: Element) -> Set<String> {
+        guard let gid = e.groupIds.last else { return [e.id] }
+        return Set(scene.elements.filter { $0.groupIds.contains(gid) }.map(\.id))
+    }
+
+    private func groupSelection() {
+        guard scene.selection.count >= 2 else { return }
+        scene.beginEdit()
+        let gid = UUID().uuidString
+        for id in scene.selection { scene.update(id: id) { $0.groupIds.append(gid) } }
+        updateSelectionState()
+    }
+
+    private func ungroupSelection() {
+        guard !scene.selection.isEmpty else { return }
+        scene.beginEdit()
+        for id in scene.selection {
+            scene.update(id: id) { if !$0.groupIds.isEmpty { $0.groupIds.removeLast() } }
+        }
+        updateSelectionState()
+    }
+
     private func eraseAt(_ p: CGPoint) {
         if let hit = scene.hitTest(p, tolerance: 6 / camera.zoom) {
             renderer.invalidate(hit.id)
@@ -455,11 +513,14 @@ final class CanvasView: NSView {
             }
         }
         if let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) {
+            let members = groupMembers(of: hit)  // whole group, if grouped
             if shift {
-                if scene.selection.contains(hit.id) { scene.selection.remove(hit.id) }
-                else { scene.selection.insert(hit.id) }
+                if scene.selection.isSuperset(of: members) { scene.selection.subtract(members) }
+                else { scene.selection.formUnion(members) }
             } else if !scene.selection.contains(hit.id) {
-                scene.selection = [hit.id]
+                scene.selection = members
+            } else {
+                scene.selection.formUnion(members)
             }
             updateSelectionState()
             scene.beginEdit()
@@ -713,6 +774,7 @@ final class CanvasView: NSView {
 
     private func updateSelectionState() {
         controller.hasSelection = !scene.selection.isEmpty
+        controller.selectionCount = scene.selection.count
         controller.selectionType = scene.selection.first.flatMap { scene.element($0)?.type }
         // Reflect the (first) selected element's style into the inspector.
         if let id = scene.selection.first, let e = scene.element(id) {
@@ -848,6 +910,7 @@ final class CanvasView: NSView {
         case "v": paste(); return true
         case "a": scene.selection = Set(scene.elements.map(\.id))
                   updateSelectionState(); needsDisplay = true; return true
+        case "g": shift ? ungroupSelection() : groupSelection(); needsDisplay = true; return true
         default: return super.performKeyEquivalent(with: event)
         }
     }

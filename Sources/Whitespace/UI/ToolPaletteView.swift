@@ -278,6 +278,9 @@ struct ToolPaletteView: View {
                     get: { controller.style.opacity },
                     set: { controller.style.opacity = $0; apply() }), in: 0...100)
             }
+            if controller.selectionCount >= 2 {
+                section("Align") { alignRow }
+            }
             bottomBar
         }
         .font(.system(size: 12))
@@ -340,6 +343,24 @@ struct ToolPaletteView: View {
 
     private func hexInt(_ s: String) -> Int {
         Int(s.replacingOccurrences(of: "#", with: ""), radix: 16) ?? 0x1e1e1e
+    }
+
+    private var alignRow: some View {
+        HStack(spacing: 4) {
+            ForEach([
+                ("left", "align.horizontal.left"), ("centerH", "align.horizontal.center"),
+                ("right", "align.horizontal.right"), ("top", "align.vertical.top"),
+                ("middleV", "align.vertical.center"), ("bottom", "align.vertical.bottom"),
+                ("distH", "arrow.left.and.right"), ("distV", "arrow.up.and.down"),
+            ], id: \.0) { mode, symbol in
+                Button { controller.alignAction?(mode) } label: {
+                    Image(systemName: symbol).frame(width: 26, height: 22)
+                        .background(Color.gray.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func arrowheadSegment(start: Bool) -> some View {
