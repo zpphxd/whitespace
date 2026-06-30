@@ -54,6 +54,7 @@ final class CanvasView: NSView {
     private var marqueeRect: CGRect?
     private var lassoPoints: [CGPoint] = []
     private var laserPoints: [CGPoint] = []
+    private var laserFadeTimer: Timer?
 
     private var textField: NSTextField?
     private var editingTextId: String?
@@ -298,11 +299,39 @@ final class CanvasView: NSView {
     private func drawLaser(in ctx: CGContext) {
         guard laserPoints.count > 1 else { return }
         let pts = laserPoints.map { camera.sceneToView($0) }
-        ctx.setStrokeColor(NSColor.systemRed.cgColor)
-        ctx.setLineWidth(4)
+        let n = pts.count
         ctx.setLineCap(.round); ctx.setLineJoin(.round)
-        ctx.move(to: pts[0]); pts.dropFirst().forEach { ctx.addLine(to: $0) }
-        ctx.strokePath()
+        // Taper alpha and width from the tail (faint, thin) to the head (bright, thick).
+        for i in 1..<n {
+            let t = CGFloat(i) / CGFloat(n - 1)
+            ctx.setStrokeColor(NSColor.systemRed.withAlphaComponent(0.12 + 0.88 * t).cgColor)
+            ctx.setLineWidth(1.5 + 4 * t)
+            ctx.move(to: pts[i - 1]); ctx.addLine(to: pts[i])
+            ctx.strokePath()
+        }
+        let head = pts[n - 1]
+        ctx.setFillColor(NSColor.systemRed.cgColor)
+        ctx.fillEllipse(in: CGRect(x: head.x - 4, y: head.y - 4, width: 8, height: 8))
+    }
+
+    /// Animate the trail retracting from the tail toward the head, then clear.
+    private func startLaserFade() {
+        laserFadeTimer?.invalidate()
+        laserFadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.laserPoints.count > 1 {
+                    let step = max(1, self.laserPoints.count / 15)   // ~constant ~0.25s sweep
+                    self.laserPoints.removeFirst(min(step, self.laserPoints.count - 1))
+                    self.needsDisplay = true
+                } else {
+                    self.laserPoints = []
+                    self.needsDisplay = true
+                    self.laserFadeTimer?.invalidate()
+                    self.laserFadeTimer = nil
+                }
+            }
+        }
     }
 
     private func drawMarquee(in ctx: CGContext) {
@@ -370,6 +399,7 @@ final class CanvasView: NSView {
         } else if tool == .lasso {
             lassoPoints = [p]; drag = .lasso
         } else if tool == .laser {
+            laserFadeTimer?.invalidate(); laserFadeTimer = nil
             laserPoints = [p]; drag = .laser
         } else {
             beginShape(at: p, type: tool.rawValue)  // rectangle / ellipse / diamond / frame
@@ -506,7 +536,7 @@ final class CanvasView: NSView {
             lassoPoints = []
             needsDisplay = true
         case .laser:
-            laserPoints = []  // trail clears on release
+            startLaserFade()  // trail retracts from tail → head, then clears
             needsDisplay = true
         case .freedraw:
             break
