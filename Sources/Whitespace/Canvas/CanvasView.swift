@@ -418,15 +418,16 @@ final class CanvasView: NSView {
 
     private func finalizeCreatedShape(_ id: String) {
         guard let e = scene.element(id) else { return }
-        // Tiny drag → give a sensible default size and keep it selected.
+        // A click without a real drag creates nothing — otherwise the first
+        // click of a double-click (to add text) would drop a stray shape.
         if abs(e.width) < 4 && abs(e.height) < 4 {
-            scene.update(id: id) { el in el.width = 120; el.height = 80 }
-        } else {
-            // Normalize negative sizes into origin+positive extent.
-            scene.update(id: id) { el in
-                if el.width < 0 { el.x += el.width; el.width = -el.width }
-                if el.height < 0 { el.y += el.height; el.height = -el.height }
-            }
+            scene.remove(id: id)
+            return
+        }
+        // Normalize negative sizes into origin+positive extent.
+        scene.update(id: id) { el in
+            if el.width < 0 { el.x += el.width; el.width = -el.width }
+            if el.height < 0 { el.y += el.height; el.height = -el.height }
         }
         scene.selection = [id]
         updateSelectionState()  // stay on the current tool for repeated drawing
