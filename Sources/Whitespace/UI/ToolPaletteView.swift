@@ -6,6 +6,7 @@ struct ToolPaletteView: View {
     @ObservedObject var controller: CanvasController
     @State private var editingTab: Int?
     @State private var renameText = ""
+    @FocusState private var renameFocused: Bool
 
     private let strokeSwatches = ["#1e1e1e", "#e03131", "#2f9e44", "#1971c2", "#f08c00"]
     private let bgSwatches = ["transparent", "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"]
@@ -28,29 +29,42 @@ struct ToolPaletteView: View {
             HStack(spacing: 5) {
                 ForEach(Array(controller.tabs.enumerated()), id: \.offset) { i, name in
                     if editingTab == i {
-                        TextField("Name", text: $renameText, onCommit: {
-                            controller.renameTab?(i, renameText); editingTab = nil
-                        })
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11))
-                        .frame(width: 90)
-                    } else {
-                        Text(name)
-                            .font(.system(size: 11, weight: i == controller.currentTab ? .semibold : .regular))
-                            .lineLimit(1)
-                            .padding(.horizontal, 9).padding(.vertical, 3)
-                            .background(i == controller.currentTab
-                                        ? Color(hex: 0x6965db) : Color.white.opacity(0.14))
-                            .foregroundStyle(i == controller.currentTab ? .white : .primary)
-                            .clipShape(Capsule())
-                            .onTapGesture { controller.selectTab?(i) }
-                            .onTapGesture(count: 2) { renameText = name; editingTab = i }
-                            .contextMenu {
-                                Button("Rename") { renameText = name; editingTab = i }
-                                if controller.tabs.count > 1 {
-                                    Button("Close", role: .destructive) { controller.closeTab?(i) }
-                                }
+                        TextField("Name", text: $renameText, onCommit: { commitRename(i) })
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11))
+                            .frame(width: 96)
+                            .focused($renameFocused)
+                            .onAppear {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { renameFocused = true }
                             }
+                            .onExitCommand { editingTab = nil }
+                    } else {
+                        let active = i == controller.currentTab
+                        HStack(spacing: 4) {
+                            Text(name)
+                                .font(.system(size: 11, weight: active ? .semibold : .regular))
+                                .lineLimit(1)
+                            if active && controller.tabs.count > 1 {
+                                Button { controller.closeTab?(i) } label: {
+                                    Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Delete board")
+                            }
+                        }
+                        .padding(.horizontal, 9).padding(.vertical, 3)
+                        .background(active ? Color(hex: 0x6965db) : Color.white.opacity(0.14))
+                        .foregroundStyle(active ? .white : .primary)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
+                        .onTapGesture { controller.selectTab?(i) }
+                        .onTapGesture(count: 2) { renameText = name; editingTab = i }
+                        .contextMenu {
+                            Button("Rename") { renameText = name; editingTab = i }
+                            if controller.tabs.count > 1 {
+                                Button("Delete", role: .destructive) { controller.closeTab?(i) }
+                            }
+                        }
                     }
                 }
                 Button { controller.addTab?() } label: {
@@ -173,6 +187,11 @@ struct ToolPaletteView: View {
 
     private func hexInt(_ s: String) -> Int {
         Int(s.replacingOccurrences(of: "#", with: ""), radix: 16) ?? 0x1e1e1e
+    }
+
+    private func commitRename(_ i: Int) {
+        controller.renameTab?(i, renameText)
+        editingTab = nil
     }
 
     private func apply() {

@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+/// Floating panel that can become key (so its text fields — e.g. tab rename —
+/// accept typing) without fully activating the app away from the canvas.
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 /// Floating tool palette, shown only while editing. Uses an `NSHostingController`
 /// so the panel sizes itself exactly to the SwiftUI content (no clipping, no
 /// hard-coded width). Stays on the active Space (won't hover over fullscreen
@@ -12,9 +18,7 @@ final class PaletteWindow {
     init(controller: CanvasController) {
         let host = NSHostingController(rootView: ToolPaletteView(controller: controller))
 
-        panel = NSPanel(
-            contentViewController: host
-        )
+        panel = KeyablePanel(contentViewController: host)
         panel.styleMask = [.borderless, .nonactivatingPanel]
         panel.isMovableByWindowBackground = true
         panel.isFloatingPanel = true
