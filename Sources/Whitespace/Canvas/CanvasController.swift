@@ -16,6 +16,7 @@ final class CanvasController: ObservableObject {
     var renameTab: ((Int, String) -> Void)?
     var closeTab: ((Int) -> Void)?
     var linkFileAction: (() -> Void)?
+    var linkURLAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).
     var setIdleOpacity: ((CGFloat) -> Void)?

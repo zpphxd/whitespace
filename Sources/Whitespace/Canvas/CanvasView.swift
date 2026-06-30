@@ -365,8 +365,7 @@ final class CanvasView: NSView {
         }
         rebuildArrow(id)
         scene.selection = [id]
-        controller.tool = .select
-        updateSelectionState()
+        updateSelectionState()  // stay on the current tool for repeated drawing
     }
 
     private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image"]
@@ -430,8 +429,7 @@ final class CanvasView: NSView {
             }
         }
         scene.selection = [id]
-        controller.tool = .select
-        updateSelectionState()
+        updateSelectionState()  // stay on the current tool for repeated drawing
     }
 
     private func resize(id: String, handle: Handle, start: CGRect, to p: CGPoint) {
@@ -480,11 +478,15 @@ final class CanvasView: NSView {
 
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
-        let name = (path as NSString).lastPathComponent
+        addLink(link: path, name: (path as NSString).lastPathComponent)
+    }
+
+    /// Drop a link node (file/folder/URL) at the center of the current view.
+    func addLink(link: String, name: String) {
         let size = 16.0
-        let isURL = path.contains("://")
+        let isURL = link.contains("://")
         var isDir: ObjCBool = false
-        FileManager.default.fileExists(atPath: (path as NSString).expandingTildeInPath, isDirectory: &isDir)
+        FileManager.default.fileExists(atPath: (link as NSString).expandingTildeInPath, isDirectory: &isDir)
         let icon = isURL ? "🔗 " : (isDir.boolValue ? "📁 " : "📄 ")
         let display = icon + name
         let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
@@ -493,12 +495,11 @@ final class CanvasView: NSView {
         var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
                             width: Double(width) + 6, height: size * 1.3)
         e.text = name
-        e.link = path
+        e.link = link
         e.backgroundColor = "transparent"
         e.fontSize = size
         scene.add(e)
         scene.selection = [e.id]
-        controller.tool = .select
         updateSelectionState()
     }
 

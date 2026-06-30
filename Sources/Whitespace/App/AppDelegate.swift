@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         controller.linkFileAction = { [weak self] in self?.linkFile() }
+        controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.setIdleOpacity = { [weak self] v in
             Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
         }
@@ -223,6 +224,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url {
             canvas.addFileNode(path: url.path)
+        }
+    }
+
+    /// Prompt for a URL and drop a 🔗 link node.
+    private func linkURL() {
+        let alert = NSAlert()
+        alert.messageText = "Link a URL"
+        alert.informativeText = "Web (https://…) or app link (obsidian://…)."
+        alert.addButton(withTitle: "Link")
+        alert.addButton(withTitle: "Cancel")
+        let tf = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        tf.placeholderString = "https://…"
+        alert.accessoryView = tf
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = tf
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = tf.stringValue.trimmingCharacters(in: .whitespaces)
+            guard !url.isEmpty else { return }
+            let name = URL(string: url)?.host ?? url
+            canvas.addLink(link: url, name: name)
         }
     }
 

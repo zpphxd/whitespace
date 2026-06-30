@@ -145,13 +145,16 @@ struct ToolPaletteView: View {
                 .help("\(tool.rawValue.capitalized) (\(String(tool.key)))")
             }
             Divider().frame(height: 18).padding(.horizontal, 1)
-            Button { controller.linkFileAction?() } label: {
-                Image(systemName: "paperclip")
-                    .frame(width: 25, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            Menu {
+                Button("Link File or Folder…") { controller.linkFileAction?() }
+                Button("Link URL…") { controller.linkURLAction?() }
+            } label: {
+                Image(systemName: "paperclip").frame(width: 25, height: 26)
             }
-            .buttonStyle(.plain)
-            .help("Link a file or folder")
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Link a file, folder, or URL")
         }
     }
 
