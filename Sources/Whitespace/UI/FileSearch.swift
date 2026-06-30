@@ -101,7 +101,8 @@ final class FileSearchWindow: NSObject, NSTextFieldDelegate, NSTableViewDataSour
         }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(field)   // deterministic focus
+        let ok = panel.makeFirstResponder(field)   // deterministic focus
+        Log.write("filesearch.show: key=\(panel.isKeyWindow) firstResponderOK=\(ok)")
     }
 
     func hide() { panel.orderOut(nil) }
@@ -117,6 +118,7 @@ final class FileSearchWindow: NSObject, NSTextFieldDelegate, NSTableViewDataSour
             DispatchQueue.main.async { [weak self] in
                 self?.results = out
                 self?.table.reloadData()
+                Log.write("filesearch query=\(q) results=\(out.count)")
             }
         }
         pending = item
@@ -153,6 +155,7 @@ final class FileSearchWindow: NSObject, NSTextFieldDelegate, NSTableViewDataSour
     }
 
     private func pick(_ path: String) {
+        Log.write("filesearch pick=\(path)")
         hide()
         onPick?(path)
     }

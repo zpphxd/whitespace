@@ -24,7 +24,7 @@ final class PaletteWindow {
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
-        panel.hasShadow = true
+        panel.hasShadow = false   // the window shadow reads as a black outline
         panel.collectionBehavior = [.moveToActiveSpace, .ignoresCycle]
         panel.backgroundColor = .clear
         panel.isOpaque = false

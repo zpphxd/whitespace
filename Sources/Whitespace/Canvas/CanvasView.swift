@@ -480,6 +480,7 @@ final class CanvasView: NSView {
 
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
+        Log.write("addFileNode \(path) editing=\(isEditing)")
         let name = (path as NSString).lastPathComponent
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()

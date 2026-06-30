@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.window.isEditing else { return event }
             if event.charactersIgnoringModifiers == "/", !self.isTextEditing() {
+                Log.write("slash monitor -> show file search")
                 self.fileSearch.show()
                 return nil
             }
