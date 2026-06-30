@@ -12,6 +12,7 @@ final class ElementRenderer {
         var drawable: RoughDrawable
     }
     private var cache: [String: CacheEntry] = [:]
+    private var imageCache: [String: NSImage] = [:]
 
     func invalidate(_ id: String) { cache.removeValue(forKey: id) }
     func invalidateAll() { cache.removeAll() }
@@ -38,6 +39,8 @@ final class ElementRenderer {
             drawText(e, color: stroke, opacity: opacity, in: ctx)
         case "file":
             drawFileNode(e, opacity: opacity, in: ctx)
+        case "image":
+            drawImage(e, opacity: opacity, in: ctx)
         case "freedraw":
             drawFreehand(e, color: stroke, opacity: opacity, in: ctx)
         default:
@@ -145,6 +148,26 @@ final class ElementRenderer {
         default: // "arrow" — open V
             ctx.move(to: p1); ctx.addLine(to: tip); ctx.addLine(to: p2); ctx.strokePath()
         }
+        ctx.restoreGState()
+    }
+
+    // MARK: Image
+
+    private func drawImage(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
+        guard let path = e.link else { return }
+        let image: NSImage
+        if let cached = imageCache[path] {
+            image = cached
+        } else if let loaded = NSImage(contentsOfFile: (path as NSString).expandingTildeInPath) {
+            imageCache[path] = loaded; image = loaded
+        } else { return }
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        ctx.saveGState()
+        ctx.setAlpha(opacity)
+        // Flip vertically within the element box (CG images draw bottom-up).
+        ctx.translateBy(x: e.rect.minX, y: e.rect.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: e.rect.width, height: e.rect.height))
         ctx.restoreGState()
     }
 

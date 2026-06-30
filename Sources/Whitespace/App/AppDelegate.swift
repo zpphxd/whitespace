@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
         controller.linkFileAction = { [weak self] in self?.linkFile() }
         controller.linkURLAction = { [weak self] in self?.linkURL() }
+        controller.insertImageAction = { [weak self] in self?.insertImage() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setIdleOpacity = { [weak self] v in
             Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
@@ -266,6 +267,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.runModal() == .OK, let url = panel.url {
             canvas.addFileNode(path: url.path)
         }
+    }
+
+    private func insertImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image]
+        panel.message = "Choose an image to place on the whiteboard"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url { canvas.addImage(path: url.path) }
     }
 
     /// Prompt for a URL and drop a 🔗 link node.

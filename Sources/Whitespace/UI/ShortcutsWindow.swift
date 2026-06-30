@@ -42,9 +42,13 @@ final class KeyRecorder: NSView {
         self.keyCode = keyCode; self.mods = mods
         super.init(frame: NSRect(x: 0, y: 0, width: 130, height: 26))
         wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 130).isActive = true
+        heightAnchor.constraint(equalToConstant: 26).isActive = true
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    override var intrinsicContentSize: NSSize { NSSize(width: 130, height: 26) }
     override var acceptsFirstResponder: Bool { true }
 
     override func mouseDown(with event: NSEvent) {

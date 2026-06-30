@@ -17,6 +17,7 @@ final class CanvasController: ObservableObject {
     var closeTab: ((Int) -> Void)?
     var linkFileAction: (() -> Void)?
     var linkURLAction: (() -> Void)?
+    var insertImageAction: (() -> Void)?
     var clearBoardAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).

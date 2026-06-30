@@ -24,7 +24,7 @@ struct ToolPaletteView: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
-        .frame(width: 332)
+        .frame(width: 376)
         .liquidGlassPanel(cornerRadius: 24)
     }
 
@@ -135,7 +135,7 @@ struct ToolPaletteView: View {
                     controller.tool = tool
                 } label: {
                     Image(systemName: tool.symbol)
-                        .frame(width: 25, height: 26)
+                        .frame(width: 24, height: 26)
                         .background(controller.tool == tool ? Color(hex: 0x6965db) : .clear)
                         .foregroundStyle(controller.tool == tool ? .white : .primary)
                         .clipShape(RoundedRectangle(cornerRadius: 7))
@@ -144,6 +144,12 @@ struct ToolPaletteView: View {
                 .help("\(tool.rawValue.capitalized) (\(String(tool.key)))")
             }
             Divider().frame(height: 18).padding(.horizontal, 1)
+            Button { controller.insertImageAction?() } label: {
+                Image(systemName: "photo").frame(width: 25, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(.plain)
+            .help("Insert image")
             Menu {
                 Button("Link File or Folder…") { controller.linkFileAction?() }
                 Button("Link URL…") { controller.linkURLAction?() }

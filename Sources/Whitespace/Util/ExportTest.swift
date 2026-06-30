@@ -35,6 +35,10 @@ enum ExportTest {
         elements.append(Element(type: "text", x: 70, y: 320, width: 150, height: 90, seed: 10,
                                 text: "This text should wrap to fit the box width", fontSize: 20))
 
+        var image = Element(type: "image", x: 470, y: 60, width: 120, height: 120, seed: 13)
+        image.link = "/Users/zachpowers/whitespace/AppIcon.png"
+        elements.append(image)
+
         var fileNode = Element(type: "file", x: 440, y: 300, width: 200, height: 56, seed: 12)
         fileNode.text = "Project Plan.md"
         fileNode.link = "~/Notes/Project Plan.md"

@@ -40,6 +40,7 @@ final class CanvasView: NSView {
         case endpoint(id: String, isStart: Bool, otherAbs: CGPoint)
         case marquee(startScene: CGPoint)
         case pan
+        case erase
     }
     private var drag: Drag = .none
     private var dragStart: CGPoint = .zero
@@ -75,8 +76,11 @@ final class CanvasView: NSView {
         let scenePt = camera.viewToScene(convert(sender.draggingLocation, from: nil))
         for (i, url) in urls.enumerated() {
             let p = CGPoint(x: scenePt.x, y: scenePt.y + CGFloat(i) * 28)
-            if url.pathExtension.lowercased() == "excalidraw" {
+            let ext = url.pathExtension.lowercased()
+            if ext == "excalidraw" {
                 onOpenFile?(url)
+            } else if Self.imageExtensions.contains(ext) {
+                addImage(path: url.path, at: p)
             } else {
                 addLink(link: url.path, name: url.lastPathComponent, at: p)
             }
@@ -227,7 +231,13 @@ final class CanvasView: NSView {
         if spaceDown { drag = .pan; return }
 
         let tool = controller.tool
-        if tool == .select {
+        if tool == .hand {
+            drag = .pan
+        } else if tool == .eraser {
+            scene.beginEdit()
+            eraseAt(p)
+            drag = .erase
+        } else if tool == .select {
             beginSelectInteraction(at: p, viewPt: viewPoint(event), shift: event.modifierFlags.contains(.shift))
         } else if tool == .text {
             beginText(at: p)
@@ -284,8 +294,17 @@ final class CanvasView: NSView {
             marqueeRect = CGRect(x: min(startScene.x, p.x), y: min(startScene.y, p.y),
                                  width: abs(p.x - startScene.x), height: abs(p.y - startScene.y))
             needsDisplay = true
+        case .erase:
+            eraseAt(p)
         case .none:
             break
+        }
+    }
+
+    private func eraseAt(_ p: CGPoint) {
+        if let hit = scene.hitTest(p, tolerance: 6 / camera.zoom) {
+            renderer.invalidate(hit.id)
+            scene.remove(id: hit.id)
         }
     }
 
@@ -541,6 +560,27 @@ final class CanvasView: NSView {
     func addFileNode(path: String) {
         addLink(link: path, name: (path as NSString).lastPathComponent)
     }
+
+    /// Insert an image element from a file path, sized to fit ~320pt.
+    func addImage(path: String, at point: CGPoint? = nil) {
+        guard let img = NSImage(contentsOfFile: (path as NSString).expandingTildeInPath),
+              img.size.width > 0 else { return }
+        let maxDim: CGFloat = 320
+        let scale = min(1, maxDim / max(img.size.width, img.size.height))
+        let w = img.size.width * scale, h = img.size.height * scale
+        let center = point ?? camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "image", x: center.x - Double(w) / 2, y: center.y - Double(h) / 2,
+                            width: Double(w), height: Double(h))
+        e.link = path
+        e.backgroundColor = "transparent"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+    }
+
+    private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"]
 
     /// Drop a link node (file/folder/URL) at a scene point (default view center).
     func addLink(link: String, name: String, at point: CGPoint? = nil) {

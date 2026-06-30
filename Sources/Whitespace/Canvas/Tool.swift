@@ -1,13 +1,14 @@
 import Foundation
 
 enum Tool: String, CaseIterable {
-    case select, rectangle, ellipse, diamond, arrow, line, freedraw, text
+    case hand, select, rectangle, ellipse, diamond, arrow, line, freedraw, text, eraser
 
-    var creates: Bool { self != .select }
+    var creates: Bool { self != .select && self != .hand && self != .eraser }
 
     /// Keyboard shortcut (Excalidraw-style single keys).
     var key: Character {
         switch self {
+        case .hand: return "h"
         case .select: return "v"
         case .rectangle: return "r"
         case .ellipse: return "o"
@@ -16,11 +17,13 @@ enum Tool: String, CaseIterable {
         case .line: return "l"
         case .freedraw: return "p"
         case .text: return "t"
+        case .eraser: return "e"
         }
     }
 
     var symbol: String {
         switch self {
+        case .hand: return "hand.raised"
         case .select: return "cursorarrow"
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"
@@ -29,6 +32,7 @@ enum Tool: String, CaseIterable {
         case .line: return "line.diagonal"
         case .freedraw: return "pencil"
         case .text: return "textformat"
+        case .eraser: return "eraser"
         }
     }
 }
