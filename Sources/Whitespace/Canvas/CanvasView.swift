@@ -597,6 +597,7 @@ final class CanvasView: NSView {
             controller.style.roughness = e.roughness
             controller.style.opacity = e.opacity
             if let fs = e.fontSize { controller.style.fontSize = fs }
+            if let ff = e.fontFamily { controller.style.fontFamily = ff }
             controller.style.rounded = e.roundness != nil
             controller.style.elbowArrow = e.elbowed
             controller.style.startArrowhead = e.startArrowhead ?? "none"
@@ -627,7 +628,8 @@ final class CanvasView: NSView {
                 }
                 if e.type == "text" {
                     e.fontSize = s.fontSize
-                    let font = Fonts.handDrawn(size: CGFloat(s.fontSize))
+                    e.fontFamily = s.fontFamily
+                    let font = Fonts.font(family: s.fontFamily, size: CGFloat(s.fontSize))
                     let w = ((e.text ?? "") as NSString).size(withAttributes: [.font: font]).width
                     e.width = Double(w) + 8
                     e.height = s.fontSize * 1.25
@@ -782,7 +784,7 @@ final class CanvasView: NSView {
         var e = makeElement(type: "text", x: p.x, y: p.y, width: 0, height: 0)
         e.text = ""
         e.fontSize = controller.style.fontSize
-        e.fontFamily = 5
+        e.fontFamily = controller.style.fontFamily
         e.strokeColor = controller.style.strokeColor
         scene.add(e)
         scene.selection = [e.id]
@@ -803,10 +805,11 @@ final class CanvasView: NSView {
         let field = NSTextField(frame: NSRect(x: viewOrigin.x, y: viewOrigin.y,
                                               width: max(240, e.width * camera.zoom + 40), height: size + 8))
         field.stringValue = e.text ?? ""
-        field.font = Fonts.handDrawn(size: size)
+        field.font = Fonts.font(family: e.fontFamily ?? 1, size: size)
         field.isBordered = false
-        field.drawsBackground = true
-        field.backgroundColor = NSColor.white.withAlphaComponent(0.9)
+        // Match the board backdrop so the editor blends (transparent/wash/white).
+        field.drawsBackground = editBoardOpacity > 0.02
+        field.backgroundColor = NSColor.white.withAlphaComponent(editBoardOpacity)
         field.textColor = NSColor.excalidraw(e.strokeColor)
         field.focusRingType = .none
         field.target = self
@@ -824,10 +827,11 @@ final class CanvasView: NSView {
         guard let field = textField, let id = editingTextId else { return }
         let value = field.stringValue
         let size = CGFloat(scene.element(id)?.fontSize ?? 20)
+        let family = scene.element(id)?.fontFamily ?? 1
         if value.isEmpty {
             scene.remove(id: id)
         } else {
-            let width = (value as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: size)]).width
+            let width = (value as NSString).size(withAttributes: [.font: Fonts.font(family: family, size: size)]).width
             scene.update(id: id) { e in
                 e.text = value
                 e.width = Double(width) + 8

@@ -171,7 +171,7 @@ final class ElementRenderer {
     private func drawText(_ e: Element, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
         guard let text = e.text, !text.isEmpty else { return }
         let size = CGFloat(e.fontSize ?? 20)
-        let font = Fonts.handDrawn(size: size)
+        let font = Fonts.font(family: e.fontFamily ?? 1, size: size)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: color.withAlphaComponent(opacity),
         ]

@@ -44,6 +44,7 @@ struct CurrentStyle {
     var roughness: Double = 1
     var opacity: Double = 100
     var fontSize: Double = 20
+    var fontFamily: Int = 1             // 1 hand-drawn, 2 normal, 3 code, 5 fancy
     var rounded: Bool = true            // edges: rounded vs sharp
     var elbowArrow: Bool = false        // arrow type: elbow vs straight
     var startArrowhead: String = "none"

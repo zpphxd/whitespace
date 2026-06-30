@@ -67,7 +67,7 @@ enum Export {
             var s = ""
             for (i, line) in (e.text ?? "").components(separatedBy: "\n").enumerated() {
                 let y = e.y + size * (1 + Double(i) * 1.25)
-                s += "<text x=\"\(num(e.x))\" y=\"\(num(y))\" font-family=\"Bradley Hand, cursive\" "
+                s += "<text x=\"\(num(e.x))\" y=\"\(num(y))\" font-family=\"\(Fonts.cssFamily(e.fontFamily ?? 1))\" "
                 s += "font-size=\"\(num(size))\" fill=\"\(stroke)\" opacity=\"\(num(opacity))\">"
                 s += line.htmlEscaped + "</text>\n"
             }

@@ -69,11 +69,6 @@ final class MenuBarController {
         menu.addItem(paletteItem)
         menu.addItem(.separator())
 
-        let keepIcons = NSMenuItem(title: "Keep Desktop Icons Visible",
-                                   action: #selector(toggleKeepIconsItem(_:)), keyEquivalent: "")
-        keepIcons.target = self
-        keepIcons.state = Settings.keepDesktopIcons ? .on : .off
-        menu.addItem(keepIcons)
         menu.addItem(makeBoardMenu())
         menu.addItem(.separator())
 

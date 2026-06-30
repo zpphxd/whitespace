@@ -106,9 +106,6 @@ struct ToolPaletteView: View {
                 Text("Solid white").tag(1.0)
                 Text("Transparent").tag(0.0)
             }
-            Toggle("Keep desktop icons", isOn: Binding(
-                get: { Settings.keepDesktopIcons },
-                set: { controller.setKeepIcons?($0) }))
             Picker("Link color", selection: Binding(
                 get: { Settings.linkColor },
                 set: { controller.setLinkColorAction?($0) })) {
@@ -198,13 +195,13 @@ struct ToolPaletteView: View {
                             set: { controller.style.strokeWidth = $0; apply() }), in: 1...8)
                     }
                     section("Stroke style") {
-                        Picker("", selection: Binding<StrokeStyle>(
+                        IconSegment(options: [
+                            (.solid, AnyView(StrokeStyleGlyph(style: .solid))),
+                            (.dashed, AnyView(StrokeStyleGlyph(style: .dashed))),
+                            (.dotted, AnyView(StrokeStyleGlyph(style: .dotted))),
+                        ], selection: Binding<StrokeStyle>(
                             get: { controller.style.strokeStyle },
-                            set: { controller.style.strokeStyle = $0; apply() })) {
-                            Text("Solid").tag(StrokeStyle.solid)
-                            Text("Dashed").tag(StrokeStyle.dashed)
-                            Text("Dotted").tag(StrokeStyle.dotted)
-                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                            set: { controller.style.strokeStyle = $0; apply() }))
                     }
                     section("Sloppiness") {
                         Picker("", selection: Binding<Double>(
@@ -230,21 +227,31 @@ struct ToolPaletteView: View {
                 }
                 if isArrow {
                     section("Arrow type") {
-                        Picker("", selection: Binding<Bool>(
+                        IconSegment(options: [
+                            (false, AnyView(ArrowTypeGlyph(elbow: false))),
+                            (true, AnyView(ArrowTypeGlyph(elbow: true))),
+                        ], selection: Binding<Bool>(
                             get: { controller.style.elbowArrow },
-                            set: { controller.style.elbowArrow = $0; apply() })) {
-                            Text("Straight").tag(false)
-                            Text("Elbow").tag(true)
-                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                            set: { controller.style.elbowArrow = $0; apply() }))
                     }
                     section("Arrowheads") {
-                        HStack(spacing: 8) {
-                            arrowheadPicker(start: true)
-                            arrowheadPicker(start: false)
+                        VStack(alignment: .leading, spacing: 6) {
+                            arrowheadSegment(start: true)
+                            arrowheadSegment(start: false)
                         }
                     }
                 }
                 if isText {
+                    section("Font family") {
+                        IconSegment(options: [
+                            (value: 1, icon: AnyView(Image(systemName: "pencil"))),
+                            (value: 2, icon: AnyView(Image(systemName: "character"))),
+                            (value: 3, icon: AnyView(Image(systemName: "chevron.left.forwardslash.chevron.right"))),
+                            (value: 5, icon: AnyView(Image(systemName: "a.square"))),
+                        ], selection: Binding<Int>(
+                            get: { controller.style.fontFamily },
+                            set: { controller.style.fontFamily = $0; apply() }))
+                    }
                     section("Text size — \(Int(controller.style.fontSize)) pt") {
                         Slider(value: Binding(
                             get: { controller.style.fontSize },
@@ -321,20 +328,19 @@ struct ToolPaletteView: View {
         Int(s.replacingOccurrences(of: "#", with: ""), radix: 16) ?? 0x1e1e1e
     }
 
-    private func arrowheadPicker(start: Bool) -> some View {
-        Picker("", selection: Binding<String>(
+    private func arrowheadSegment(start: Bool) -> some View {
+        IconSegment(options: [
+            (value: "none", icon: AnyView(ArrowheadGlyph(type: "none"))),
+            (value: "arrow", icon: AnyView(ArrowheadGlyph(type: "arrow"))),
+            (value: "triangle", icon: AnyView(ArrowheadGlyph(type: "triangle"))),
+            (value: "dot", icon: AnyView(ArrowheadGlyph(type: "dot"))),
+            (value: "bar", icon: AnyView(ArrowheadGlyph(type: "bar"))),
+        ], selection: Binding<String>(
             get: { start ? controller.style.startArrowhead : controller.style.endArrowhead },
             set: {
                 if start { controller.style.startArrowhead = $0 } else { controller.style.endArrowhead = $0 }
                 apply()
-            })) {
-            Text(start ? "Start: none" : "End: none").tag("none")
-            Text("Arrow").tag("arrow")
-            Text("Triangle").tag("triangle")
-            Text("Dot").tag("dot")
-            Text("Bar").tag("bar")
-        }
-        .labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity)
+            }))
     }
 
     private func commitRename(_ i: Int) {
