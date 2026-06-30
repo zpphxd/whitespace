@@ -15,6 +15,7 @@ final class CanvasController: ObservableObject {
     var selectTab: ((Int) -> Void)?
     var renameTab: ((Int, String) -> Void)?
     var closeTab: ((Int) -> Void)?
+    var linkFileAction: (() -> Void)?
 
     /// Set by the canvas; invoked by the inspector to push style onto selection.
     var applyStyleToSelection: (() -> Void)?

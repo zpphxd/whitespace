@@ -11,7 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var palette: PaletteWindow!
     private let controller = CanvasController()
     private var scene: Scene!
-    private var fileSearch: FileSearchWindow!
     private var paletteHidden = false
 
     private var boards: [BoardDoc] = []
@@ -38,17 +37,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         palette = PaletteWindow(controller: controller)
 
-        fileSearch = FileSearchWindow()
-        fileSearch.onPick = { [weak self] path in self?.canvas.addFileNode(path: path) }
-        canvas.onSlashSearch = { [weak self] in self?.fileSearch.show() }
+        canvas.onSlashSearch = { [weak self] in self?.linkFile() }
+        controller.linkFileAction = { [weak self] in self?.linkFile() }
 
         // Catch "/" app-wide (works whichever of our windows is key), except
-        // while typing in a text field, so it always opens the file search.
+        // while typing in a text field, so it always opens the file picker.
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.window.isEditing else { return event }
             if event.charactersIgnoringModifiers == "/", !self.isTextEditing() {
-                Log.write("slash monitor -> show file search")
-                self.fileSearch.show()
+                self.linkFile()
                 return nil
             }
             return event
@@ -76,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTogglePalette: { [weak self] in self?.togglePalette() },
             onExportPNG: { [weak self] in self?.export(.png) },
             onExportSVG: { [weak self] in self?.export(.svg) },
-            onLinkFile: { [weak self] in self?.fileSearch.show() }
+            onLinkFile: { [weak self] in self?.linkFile() }
         )
 
         // System-wide hotkeys (one shared handler dispatches by id):
@@ -198,6 +195,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? Export.png(scene.elements)?.write(to: url, options: .atomic)
         case .svg:
             try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Pick a file/folder with the native panel and drop a linked node.
+    private func linkFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Link"
+        panel.message = "Choose a file or folder to link onto the whiteboard"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            canvas.addFileNode(path: url.path)
         }
     }
 

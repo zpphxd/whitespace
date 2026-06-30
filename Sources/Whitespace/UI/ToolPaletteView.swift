@@ -101,6 +101,14 @@ struct ToolPaletteView: View {
                 .buttonStyle(.plain)
                 .help("\(tool.rawValue.capitalized) (\(String(tool.key)))")
             }
+            Divider().frame(height: 18)
+            Button { controller.linkFileAction?() } label: {
+                Image(systemName: "paperclip")
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(.plain)
+            .help("Link a file or folder")
         }
     }
 
