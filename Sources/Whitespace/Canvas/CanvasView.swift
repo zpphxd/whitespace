@@ -34,6 +34,7 @@ final class CanvasView: NSView {
         case freedraw(id: String)
         case move(origins: [String: CGPoint])
         case resize(id: String, handle: Handle, start: CGRect)
+        case endpoint(id: String, isStart: Bool, otherAbs: CGPoint)
         case marquee(startScene: CGPoint)
         case pan
     }
@@ -114,6 +115,23 @@ final class CanvasView: NSView {
 
     private func drawSelection(in ctx: CGContext) {
         guard isEditing, let bounds = selectionBounds() else { return }
+
+        // Single line/arrow: show draggable endpoint handles instead of a box.
+        if scene.selection.count == 1,
+           let e = scene.element(scene.selection.first!),
+           e.type == "line" || e.type == "arrow" {
+            ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
+            ctx.setLineWidth(1.5)
+            for pt in [e.absolutePoints.first, e.absolutePoints.last].compactMap({ $0 }) {
+                let v = camera.sceneToView(pt)
+                let hr = CGRect(x: v.x - 5, y: v.y - 5, width: 10, height: 10)
+                ctx.setFillColor(NSColor.white.cgColor)
+                ctx.fillEllipse(in: hr)
+                ctx.strokeEllipse(in: hr)
+            }
+            return
+        }
+
         let r = viewRect(bounds).insetBy(dx: -4, dy: -4)
         ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
         ctx.setLineWidth(1.5)
@@ -218,6 +236,14 @@ final class CanvasView: NSView {
         case .resize(let id, let handle, let start):
             resize(id: id, handle: handle, start: start, to: p)
             rebuildArrowsBound(to: [id])
+        case .endpoint(let id, let isStart, let otherAbs):
+            let a = isStart ? p : otherAbs
+            let b = isStart ? otherAbs : p
+            scene.update(id: id) { e in
+                e.x = a.x; e.y = a.y
+                e.points = [[0, 0], [b.x - a.x, b.y - a.y]]
+            }
+            renderer.invalidate(id)
         case .marquee(let startScene):
             marqueeRect = CGRect(x: min(startScene.x, p.x), y: min(startScene.y, p.y),
                                  width: abs(p.x - startScene.x), height: abs(p.y - startScene.y))
@@ -241,6 +267,16 @@ final class CanvasView: NSView {
             needsDisplay = true
         case .line(let id):
             finalizeLine(id)
+        case .endpoint(let id, let isStart, _):
+            // Re-bind the dragged end if it now sits on a shape, then re-route.
+            if let arrow = scene.element(id) {
+                let pt = isStart ? arrow.absolutePoints.first : arrow.absolutePoints.last
+                let shape = pt.flatMap { topShape(at: $0, excluding: id, tolerance: 20) }
+                scene.update(id: id) { e in
+                    if isStart { e.startBindingId = shape?.id } else { e.endBindingId = shape?.id }
+                }
+                rebuildArrow(id)
+            }
         case .freedraw:
             break
         default:
@@ -252,11 +288,24 @@ final class CanvasView: NSView {
     // MARK: Interactions
 
     private func beginSelectInteraction(at p: CGPoint, viewPt: CGPoint, shift: Bool) {
-        // Resize handle hit (single selection).
-        if scene.selection.count == 1, let sb = selectionBounds() {
+        // Single line/arrow: grab an endpoint handle to adjust it.
+        if scene.selection.count == 1, let id = scene.selection.first,
+           let e = scene.element(id), e.type == "line" || e.type == "arrow",
+           let first = e.absolutePoints.first, let last = e.absolutePoints.last {
+            let firstV = camera.sceneToView(first), lastV = camera.sceneToView(last)
+            if hypot(viewPt.x - firstV.x, viewPt.y - firstV.y) <= 9 {
+                scene.beginEdit(); drag = .endpoint(id: id, isStart: true, otherAbs: last); return
+            }
+            if hypot(viewPt.x - lastV.x, viewPt.y - lastV.y) <= 9 {
+                scene.beginEdit(); drag = .endpoint(id: id, isStart: false, otherAbs: first); return
+            }
+        }
+        // Resize handle hit (single selection, box-shaped elements).
+        if scene.selection.count == 1, let sb = selectionBounds(),
+           let e = scene.element(scene.selection.first!), e.type != "line", e.type != "arrow" {
             let r = viewRect(sb).insetBy(dx: -4, dy: -4)
             for h in Handle.allCases where handleRect(h, in: r).insetBy(dx: -3, dy: -3).contains(viewPt) {
-                if let id = scene.selection.first, let e = scene.element(id) {
+                if let id = scene.selection.first {
                     scene.beginEdit()
                     drag = .resize(id: id, handle: h, start: e.boundingRect)
                     return
@@ -391,9 +440,39 @@ final class CanvasView: NSView {
         if handle.movesRight { r.size.width = max(4, p.x - r.minX) }
         if handle.movesTop { let ny = min(p.y, r.maxY - 4); r.size.height = r.maxY - ny; r.origin.y = ny }
         if handle.movesBottom { r.size.height = max(4, p.y - r.minY) }
-        scene.update(id: id) { e in
-            e.x = r.minX; e.y = r.minY; e.width = r.width; e.height = r.height
+
+        guard let element = scene.element(id) else { return }
+        switch element.type {
+        case "text":
+            // Scale the font with the box height so text resizes to fit.
+            let ratio = start.height > 1 ? Double(r.height / start.height) : 1
+            let newSize = max(6, (element.fontSize ?? 20) * ratio)
+            let font = Fonts.handDrawn(size: CGFloat(newSize))
+            let w = ((element.text ?? "") as NSString).size(withAttributes: [.font: font]).width
+            scene.update(id: id) { e in
+                e.fontSize = newSize
+                e.x = r.minX; e.y = r.minY
+                e.width = Double(w) + 8; e.height = newSize * 1.25
+            }
+        case "freedraw":
+            // Remap every point from the old bounding box to the new one.
+            let sx = start.width > 0.5 ? r.width / start.width : 1
+            let sy = start.height > 0.5 ? r.height / start.height : 1
+            let pts = element.absolutePoints.map { pt in
+                CGPoint(x: r.minX + (pt.x - start.minX) * sx,
+                        y: r.minY + (pt.y - start.minY) * sy)
+            }
+            guard let origin = pts.first else { return }
+            scene.update(id: id) { e in
+                e.x = origin.x; e.y = origin.y
+                e.points = pts.map { [Double($0.x - origin.x), Double($0.y - origin.y)] }
+            }
+        default:
+            scene.update(id: id) { e in
+                e.x = r.minX; e.y = r.minY; e.width = r.width; e.height = r.height
+            }
         }
+        renderer.invalidate(id)
     }
 
     /// Drop a linked file node at the center of the current view.
