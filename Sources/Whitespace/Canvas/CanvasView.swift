@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Quartz
 
 /// The drawing surface: renders the scene under the camera and handles all
 /// pointer/keyboard interaction (create, select, move, resize, pan, zoom).
@@ -70,6 +71,10 @@ final class CanvasView: NSView {
         }
         registerForDraggedTypes([.fileURL])
         wireController()
+
+        // Redraw when a background QuickLook thumbnail becomes available.
+        NotificationCenter.default.addObserver(self, selector: #selector(thumbnailReady),
+                                               name: ThumbnailCache.readyNotification, object: nil)
 
         // Switching to a non-select tool deselects, so the inspector reflects
         // the new tool (e.g. the text tool shows Font / Text size).
@@ -870,25 +875,25 @@ final class CanvasView: NSView {
 
     private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"]
 
-    /// Drop a link node (file/folder/URL) at a scene point (default view center).
+    /// Drop a link node at a scene point (default view center). Files and folders
+    /// become a Finder-style thumbnail card; URLs stay a compact icon + name.
     func addLink(link: String, name: String, at point: CGPoint? = nil) {
-        let size = 16.0
-        let isURL = link.contains("://")
-        var isDir: ObjCBool = false
-        FileManager.default.fileExists(atPath: (link as NSString).expandingTildeInPath, isDirectory: &isDir)
-        let icon = isURL ? "🔗 " : (isDir.boolValue ? "📁 " : "📄 ")
-        let display = icon + name
-        let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
         let center = point ?? camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
-        var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
-                            width: Double(width) + 6, height: size * 1.3)
-        e.text = name
-        e.link = link
-        e.backgroundColor = "transparent"
-        e.fontSize = size
-        scene.add(e)
-        scene.selection = [e.id]
+        if link.contains("://") {
+            let size = 16.0
+            let display = "🔗 " + name
+            let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
+            var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
+                                width: Double(width) + 6, height: size * 1.3)
+            e.text = name; e.link = link; e.backgroundColor = "transparent"; e.fontSize = size
+            scene.add(e); scene.selection = [e.id]
+        } else {
+            let w = 150.0, h = 172.0
+            var e = makeElement(type: "file", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h)
+            e.text = name; e.link = link; e.backgroundColor = "#ffffff"
+            scene.add(e); scene.selection = [e.id]
+        }
         updateSelectionState()
     }
 
@@ -898,6 +903,68 @@ final class CanvasView: NSView {
             : URL(fileURLWithPath: (link as NSString).expandingTildeInPath)
         if let url { NSWorkspace.shared.open(url) }
     }
+
+    @objc private func thumbnailReady() { needsDisplay = true }
+
+    // MARK: Finder — Quick Look & context menu
+
+    /// The on-disk file URL of the single selected file/image node, if it exists.
+    private func selectedFileURL() -> URL? {
+        guard scene.selection.count == 1, let id = scene.selection.first, let e = scene.element(id),
+              e.type == "file" || e.type == "image",
+              let link = e.link, !link.contains("://") else { return nil }
+        let path = (link as NSString).expandingTildeInPath
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    private var quickLookURL: URL?
+
+    private func toggleQuickLook() {
+        guard let url = selectedFileURL(), let panel = QLPreviewPanel.shared() else { return }
+        quickLookURL = url
+        if QLPreviewPanel.sharedPreviewPanelExists() && panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = self
+        panel.delegate = self
+    }
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) { quickLookURL = nil }
+
+    private var contextPath: String?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard isEditing else { return nil }
+        let p = camera.viewToScene(viewPoint(event))
+        guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
+              hit.type == "file" || hit.type == "image",
+              let link = hit.link, !link.contains("://") else { return nil }
+        scene.selection = [hit.id]; updateSelectionState(); needsDisplay = true
+        contextPath = (link as NSString).expandingTildeInPath
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
+        menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
+        menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Delete", action: #selector(ctxDelete), keyEquivalent: "")
+        menu.items.forEach { $0.target = self }
+        return menu
+    }
+
+    @objc private func ctxOpen() {
+        if let p = contextPath { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
+    }
+    @objc private func ctxQuickLook() { toggleQuickLook() }
+    @objc private func ctxReveal() {
+        if let p = contextPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+    }
+    @objc private func ctxDelete() { deleteSelectionAction() }
 
     private func makeElement(type: String, x: Double, y: Double, width: Double, height: Double) -> Element {
         let s = controller.style
@@ -1057,7 +1124,10 @@ final class CanvasView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard isEditing else { return super.keyDown(with: event) }
-        if event.keyCode == 49 { spaceDown = true; return } // space
+        if event.keyCode == 49 { // space → Quick Look a selected file, else arm pan
+            if selectedFileURL() != nil { toggleQuickLook(); return }
+            spaceDown = true; return
+        }
         if event.charactersIgnoringModifiers == "/" { onSlashSearch?(); return }
 
         let cmd = event.modifierFlags.contains(.command)
@@ -1207,5 +1277,14 @@ final class CanvasView: NSView {
         editingTextId = nil
         controller.tool = .select
         needsDisplay = true
+    }
+}
+
+extension CanvasView: QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
+        MainActor.assumeIsolated { quickLookURL == nil ? 0 : 1 }
+    }
+    nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        MainActor.assumeIsolated { quickLookURL as NSURL? }
     }
 }

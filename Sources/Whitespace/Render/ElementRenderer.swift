@@ -206,20 +206,94 @@ final class ElementRenderer {
 
     // MARK: File node (a linked box with a filename)
 
+    private static let modifiedFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
+
     private func drawFileNode(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
-        // Transparent link: an icon (file/folder/URL) + name in the link color.
-        let name = e.linkDisplayIcon + (e.text ?? "file")
-        let size = CGFloat(e.fontSize ?? 16)
-        let font = Fonts.handDrawn(size: size)
-        let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
-            .withAlphaComponent(opacity)
-        let line = CTLineCreateWithAttributedString(
-            NSAttributedString(string: name, attributes: [.font: font, .foregroundColor: color]))
+        let link = e.link ?? ""
+        // URLs (and bare nodes) stay a compact icon + name in the link color.
+        if link.isEmpty || link.contains("://") {
+            let name = e.linkDisplayIcon + (e.text ?? "file")
+            let size = CGFloat(e.fontSize ?? 16)
+            let font = Fonts.handDrawn(size: size)
+            let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
+                .withAlphaComponent(opacity)
+            let line = CTLineCreateWithAttributedString(
+                NSAttributedString(string: name, attributes: [.font: font, .foregroundColor: color]))
+            ctx.saveGState()
+            ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            ctx.textPosition = CGPoint(x: e.x, y: e.y + size)
+            CTLineDraw(line, ctx)
+            ctx.restoreGState()
+            return
+        }
+        drawFileCard(e, path: link, opacity: opacity, in: ctx)
+    }
+
+    /// A Finder-style card: QuickLook thumbnail + filename + modified date.
+    private func drawFileCard(_ e: Element, path: String, opacity: CGFloat, in ctx: CGContext) {
+        let r = e.rect
+        let expanded = (path as NSString).expandingTildeInPath
+        let exists = FileManager.default.fileExists(atPath: expanded)
+        let captionH: CGFloat = 36
+
         ctx.saveGState()
+        ctx.setAlpha(opacity)
+        let card = CGPath(roundedRect: r, cornerWidth: 8, cornerHeight: 8, transform: nil)
+        ctx.addPath(card); ctx.setFillColor(NSColor.white.cgColor); ctx.fillPath()
+        ctx.addPath(card); ctx.setStrokeColor(NSColor(white: 0, alpha: 0.14).cgColor)
+        ctx.setLineWidth(1); ctx.strokePath()
+
+        // Thumbnail, aspect-fit and centered in the top region.
+        let thumbRect = CGRect(x: r.minX + 10, y: r.minY + 10,
+                               width: r.width - 20, height: r.height - captionH - 14)
+        if thumbRect.width > 4, thumbRect.height > 4,
+           let thumb = ThumbnailCache.shared.image(for: path,
+                            pixelSize: CGSize(width: thumbRect.width * 2, height: thumbRect.height * 2)),
+           let cg = thumb.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let iw = CGFloat(cg.width), ih = CGFloat(cg.height)
+            let scale = min(thumbRect.width / iw, thumbRect.height / ih)
+            let w = iw * scale, h = ih * scale
+            let x = thumbRect.midX - w / 2, y = thumbRect.minY + (thumbRect.height - h) / 2
+            ctx.saveGState()
+            ctx.translateBy(x: x, y: y + h); ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            ctx.restoreGState()
+        }
+
+        // Filename. Fixed dark colors (not dynamic system colors, which can
+        // resolve to nothing without an active appearance) on the white card.
+        let name = e.text ?? (expanded as NSString).lastPathComponent
+        drawCaption(name, at: CGPoint(x: r.minX + 10, y: r.maxY - 21), maxWidth: r.width - 20,
+                    font: .systemFont(ofSize: 12, weight: .medium),
+                    color: NSColor(white: 0.12, alpha: opacity), in: ctx)
+        // Subtitle: modified date, or a red "Missing" badge.
+        let subtitle = exists ? modifiedDate(expanded) : "Missing"
+        let subColor = exists ? NSColor(white: 0.5, alpha: opacity)
+                              : NSColor(hex: 0xe03131).withAlphaComponent(opacity)
+        drawCaption(subtitle, at: CGPoint(x: r.minX + 10, y: r.maxY - 7), maxWidth: r.width - 20,
+                    font: .systemFont(ofSize: 10), color: subColor, in: ctx)
+        ctx.restoreGState()
+    }
+
+    private func drawCaption(_ s: String, at baseline: CGPoint, maxWidth: CGFloat,
+                             font: NSFont, color: NSColor, in ctx: CGContext) {
+        guard !s.isEmpty else { return }
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: s, attributes: [.font: font, .foregroundColor: color]))
+        ctx.saveGState()
+        ctx.clip(to: CGRect(x: baseline.x, y: baseline.y - 12, width: maxWidth, height: 16))
         ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-        ctx.textPosition = CGPoint(x: e.x, y: e.y + size)
+        ctx.textPosition = baseline
         CTLineDraw(line, ctx)
         ctx.restoreGState()
+    }
+
+    private func modifiedDate(_ path: String) -> String {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let date = attrs[.modificationDate] as? Date else { return "" }
+        return Self.modifiedFormatter.string(from: date)
     }
 
     // MARK: Text

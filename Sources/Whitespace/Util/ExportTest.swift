@@ -56,11 +56,16 @@ enum ExportTest {
         image.link = "/Users/zachpowers/whitespace/AppIcon.png"
         elements.append(image)
 
-        var fileNode = Element(type: "file", x: 440, y: 300, width: 200, height: 56, seed: 12)
-        fileNode.text = "Project Plan.md"
-        fileNode.link = "~/Notes/Project Plan.md"
+        var fileNode = Element(type: "file", x: 700, y: 60, width: 150, height: 172, seed: 12)
+        fileNode.text = "Package.swift"
+        fileNode.link = "/Users/zachpowers/whitespace/Package.swift"
         fileNode.backgroundColor = "#ffffff"
         elements.append(fileNode)
+        var missingNode = Element(type: "file", x: 700, y: 250, width: 150, height: 172, seed: 18)
+        missingNode.text = "gone.pdf"
+        missingNode.link = "/Users/zachpowers/whitespace/gone.pdf"
+        missingNode.backgroundColor = "#ffffff"
+        elements.append(missingNode)
 
         let pngURL = URL(fileURLWithPath: dir).appendingPathComponent("export_test.png")
         let svgURL = URL(fileURLWithPath: dir).appendingPathComponent("export_test.svg")
