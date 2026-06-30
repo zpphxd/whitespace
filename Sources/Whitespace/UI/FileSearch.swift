@@ -6,6 +6,7 @@ import SwiftUI
 final class FileSearchModel: ObservableObject {
     @Published var query = ""
     @Published var results: [String] = []
+    @Published var focusNonce = 0   // bump to (re)focus the field each time shown
     private var pending: DispatchWorkItem?
 
     func search() {
@@ -48,8 +49,9 @@ struct FileSearchView: View {
                 .font(.system(size: 16))
                 .padding(14)
                 .focused($focused)
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { focused = true }
+                .onAppear { focused = true }
+                .onChange(of: model.focusNonce) { _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { focused = true }
                 }
                 .onChange(of: model.query) { _ in model.search() }
                 .onSubmit { if let first = model.results.first { onPick(first) } }
@@ -122,6 +124,7 @@ final class FileSearchWindow {
         }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        model.focusNonce += 1
     }
 
     func hide() { panel.orderOut(nil) }
