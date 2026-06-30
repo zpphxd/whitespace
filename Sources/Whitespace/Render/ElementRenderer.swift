@@ -122,8 +122,8 @@ final class ElementRenderer {
     // MARK: File node (a linked box with a filename)
 
     private func drawFileNode(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
-        // Transparent link: just "– name" in the configurable link color.
-        let name = "– " + (e.text ?? "file")
+        // Transparent link: an icon (file/folder/URL) + name in the link color.
+        let name = e.linkDisplayIcon + (e.text ?? "file")
         let size = CGFloat(e.fontSize ?? 16)
         let font = Fonts.handDrawn(size: size)
         let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))

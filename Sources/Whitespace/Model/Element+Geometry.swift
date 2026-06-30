@@ -4,6 +4,15 @@ import Foundation
 extension Element {
     var isLinear: Bool { type == "line" || type == "arrow" || type == "freedraw" }
 
+    /// Icon prefix for a link node: 🔗 for URLs, 📁 for folders, 📄 for files.
+    var linkDisplayIcon: String {
+        guard let link = link else { return "📄 " }
+        if link.contains("://") { return "🔗 " }
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: (link as NSString).expandingTildeInPath, isDirectory: &isDir)
+        return isDir.boolValue ? "📁 " : "📄 "
+    }
+
     /// Normalized rect (positive size) for dimension-based elements.
     var rect: CGRect {
         CGRect(x: x, y: y, width: width, height: height).standardized

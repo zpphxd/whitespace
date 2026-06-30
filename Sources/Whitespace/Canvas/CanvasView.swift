@@ -482,12 +482,16 @@ final class CanvasView: NSView {
     func addFileNode(path: String) {
         let name = (path as NSString).lastPathComponent
         let size = 16.0
-        let display = "– " + name
+        let isURL = path.contains("://")
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: (path as NSString).expandingTildeInPath, isDirectory: &isDir)
+        let icon = isURL ? "🔗 " : (isDir.boolValue ? "📁 " : "📄 ")
+        let display = icon + name
         let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
         var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
-                            width: Double(width) + 4, height: size * 1.3)
+                            width: Double(width) + 6, height: size * 1.3)
         e.text = name
         e.link = path
         e.backgroundColor = "transparent"
