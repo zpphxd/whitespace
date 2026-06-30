@@ -475,6 +475,14 @@ final class CanvasView: NSView {
         renderer.invalidate(id)
     }
 
+    /// Called after switching boards: drop cached paths and clear selection UI.
+    func boardDidChange() {
+        renderer.invalidateAll()
+        commitText()
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
         let name = (path as NSString).lastPathComponent

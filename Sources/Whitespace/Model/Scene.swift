@@ -42,6 +42,15 @@ final class Scene {
         notify()
     }
 
+    /// Replace all elements (switching boards). Clears selection and history.
+    func load(_ newElements: [Element]) {
+        elements = newElements
+        selection.removeAll()
+        undoStack.removeAll()
+        redoStack.removeAll()
+        notify()
+    }
+
     // MARK: Mutations
 
     func add(_ element: Element) {

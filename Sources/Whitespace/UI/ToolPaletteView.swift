@@ -4,12 +4,16 @@ import SwiftUI
 /// changes onto the current selection.
 struct ToolPaletteView: View {
     @ObservedObject var controller: CanvasController
+    @State private var editingTab: Int?
+    @State private var renameText = ""
 
     private let strokeSwatches = ["#1e1e1e", "#e03131", "#2f9e44", "#1971c2", "#f08c00"]
     private let bgSwatches = ["transparent", "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            tabBar
+            Divider()
             tools
             Divider()
             inspector
@@ -17,6 +21,47 @@ struct ToolPaletteView: View {
         .padding(16)
         .frame(width: 300)
         .liquidGlassPanel(cornerRadius: 24)
+    }
+
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 5) {
+                ForEach(Array(controller.tabs.enumerated()), id: \.offset) { i, name in
+                    if editingTab == i {
+                        TextField("Name", text: $renameText, onCommit: {
+                            controller.renameTab?(i, renameText); editingTab = nil
+                        })
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                        .frame(width: 90)
+                    } else {
+                        Text(name)
+                            .font(.system(size: 11, weight: i == controller.currentTab ? .semibold : .regular))
+                            .lineLimit(1)
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(i == controller.currentTab
+                                        ? Color(hex: 0x6965db) : Color.white.opacity(0.14))
+                            .foregroundStyle(i == controller.currentTab ? .white : .primary)
+                            .clipShape(Capsule())
+                            .onTapGesture { controller.selectTab?(i) }
+                            .onTapGesture(count: 2) { renameText = name; editingTab = i }
+                            .contextMenu {
+                                Button("Rename") { renameText = name; editingTab = i }
+                                if controller.tabs.count > 1 {
+                                    Button("Close", role: .destructive) { controller.closeTab?(i) }
+                                }
+                            }
+                    }
+                }
+                Button { controller.addTab?() } label: {
+                    Image(systemName: "plus").frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .help("New board")
+            }
+            .padding(.vertical, 1)
+        }
+        .frame(height: 26)
     }
 
     private var tools: some View {

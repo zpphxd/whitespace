@@ -8,6 +8,14 @@ final class CanvasController: ObservableObject {
     @Published var style = CurrentStyle()
     @Published var hasSelection = false
 
+    // Tabs (multiple named whiteboards).
+    @Published var tabs: [String] = ["Board 1"]
+    @Published var currentTab = 0
+    var addTab: (() -> Void)?
+    var selectTab: ((Int) -> Void)?
+    var renameTab: ((Int, String) -> Void)?
+    var closeTab: ((Int) -> Void)?
+
     /// Set by the canvas; invoked by the inspector to push style onto selection.
     var applyStyleToSelection: (() -> Void)?
     var deleteSelection: (() -> Void)?

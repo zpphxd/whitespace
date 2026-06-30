@@ -14,12 +14,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var fileSearch: FileSearchWindow!
     private var paletteHidden = false
 
+    private var boards: [BoardDoc] = []
+    private var currentBoard = 0
+
     private var autosaveItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let screen = NSScreen.main else { return }
 
-        scene = Scene(elements: DocumentStore.load(from: DocumentStore.defaultURL))
+        let ws = Workspace.load()
+        boards = ws.boards
+        currentBoard = ws.current
+        scene = Scene(elements: boards[currentBoard].elements)
+        controller.tabs = boards.map(\.name)
+        controller.currentTab = currentBoard
 
         window = DesktopWindow(screen: screen)
         canvas = CanvasView(frame: screen.frame, scene: scene, controller: controller)
@@ -33,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileSearch = FileSearchWindow()
         fileSearch.onPick = { [weak self] path in self?.canvas.addFileNode(path: path) }
         canvas.onSlashSearch = { [weak self] in self?.fileSearch.show() }
+
+        controller.addTab = { [weak self] in self?.addBoard() }
+        controller.selectTab = { [weak self] i in self?.selectBoard(i) }
+        controller.renameTab = { [weak self] i, name in self?.renameBoard(i, name) }
+        controller.closeTab = { [weak self] i in self?.closeBoard(i) }
 
         menuBar = MenuBarController(
             onToggleEdit: { [weak self] in self?.toggleEdit() },
@@ -104,7 +117,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func saveNow() {
-        DocumentStore.save(scene.elements, to: DocumentStore.defaultURL)
+        guard !boards.isEmpty else { return }
+        boards[currentBoard].elements = scene.elements
+        Workspace.save(WorkspaceData(boards: boards, current: currentBoard))
+    }
+
+    // MARK: Tabs / boards
+
+    private func selectBoard(_ index: Int) {
+        guard index >= 0, index < boards.count, index != currentBoard else { return }
+        boards[currentBoard].elements = scene.elements   // stash current
+        currentBoard = index
+        scene.load(boards[index].elements)
+        canvas.boardDidChange()
+        controller.currentTab = index
+        saveNow()
+    }
+
+    private func addBoard() {
+        boards[currentBoard].elements = scene.elements
+        let board = BoardDoc(name: "Board \(boards.count + 1)")
+        boards.append(board)
+        currentBoard = boards.count - 1
+        scene.load(board.elements)
+        canvas.boardDidChange()
+        controller.tabs = boards.map(\.name)
+        controller.currentTab = currentBoard
+        saveNow()
+    }
+
+    private func renameBoard(_ index: Int, _ name: String) {
+        guard index >= 0, index < boards.count else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        boards[index].name = trimmed.isEmpty ? boards[index].name : trimmed
+        controller.tabs = boards.map(\.name)
+        saveNow()
+    }
+
+    private func closeBoard(_ index: Int) {
+        guard boards.count > 1, index >= 0, index < boards.count else { return }
+        boards.remove(at: index)
+        currentBoard = min(currentBoard, boards.count - 1)
+        scene.load(boards[currentBoard].elements)
+        canvas.boardDidChange()
+        controller.tabs = boards.map(\.name)
+        controller.currentTab = currentBoard
+        saveNow()
     }
 
     private enum ExportKind { case png, svg }
