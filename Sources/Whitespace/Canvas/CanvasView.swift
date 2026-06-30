@@ -213,6 +213,7 @@ final class CanvasView: NSView {
             rebuildArrowsBound(to: Set(origins.keys))
         case .resize(let id, let handle, let start):
             resize(id: id, handle: handle, start: start, to: p)
+            rebuildArrowsBound(to: [id])
         case .marquee(let startScene):
             marqueeRect = CGRect(x: min(startScene.x, p.x), y: min(startScene.y, p.y),
                                  width: abs(p.x - startScene.x), height: abs(p.y - startScene.y))
@@ -302,8 +303,9 @@ final class CanvasView: NSView {
         let abs = arrow.absolutePoints
         guard let start = abs.first, let end = abs.last else { return }
         if hypot(end.x - start.x, end.y - start.y) < 4 { scene.remove(id: id); return }
-        let startShape = topShape(at: start, excluding: id)
-        let endShape = topShape(at: end, excluding: id)
+        // Generous binding radius so dropping NEAR a shape links it.
+        let startShape = topShape(at: start, excluding: id, tolerance: 20)
+        let endShape = topShape(at: end, excluding: id, tolerance: 20)
         scene.update(id: id) { el in
             el.startBindingId = startShape?.id
             el.endBindingId = endShape?.id
@@ -316,10 +318,10 @@ final class CanvasView: NSView {
 
     private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image"]
 
-    private func topShape(at p: CGPoint, excluding excludeId: String) -> Element? {
+    private func topShape(at p: CGPoint, excluding excludeId: String, tolerance: CGFloat = 4) -> Element? {
         for e in scene.elements.reversed()
         where e.id != excludeId && connectableTypes.contains(e.type) && !e.locked {
-            if e.hitTest(p, tolerance: 4) { return e }
+            if e.hitTest(p, tolerance: tolerance) { return e }
         }
         return nil
     }

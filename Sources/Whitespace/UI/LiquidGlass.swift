@@ -33,18 +33,12 @@ extension View {
         if #available(macOS 26.0, *) {
             // Non-interactive: `.interactive()` reacts to the pointer with a
             // scale/bounce that reads as a jumpy animation on a static palette.
+            // Pure native Liquid Glass — no added border or shadow (those read
+            // as a black outline around the panel).
             glassEffect(
                 .regular,
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
-            // Keep the panel defined over ANY backdrop (incl. a flat white board,
-            // where pure glass would wash out and look like it vanished): a
-            // hairline edge plus a soft drop shadow.
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 0.75)
-            }
-            .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
         } else {
             let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             background { VisualEffectBackground(material: .hudWindow, cornerRadius: cornerRadius) }
