@@ -314,14 +314,21 @@ final class CanvasView: NSView {
         ctx.fillEllipse(in: CGRect(x: head.x - 4, y: head.y - 4, width: 8, height: 8))
     }
 
-    /// Animate the trail retracting from the tail toward the head, then clear.
+    /// Hold the full trail briefly, then retract it from the tail toward the head.
     private func startLaserFade() {
+        laserFadeTimer?.invalidate()
+        laserFadeTimer = Timer.scheduledTimer(withTimeInterval: 0.9, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.retractLaser() }
+        }
+    }
+
+    private func retractLaser() {
         laserFadeTimer?.invalidate()
         laserFadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if self.laserPoints.count > 1 {
-                    let step = max(1, self.laserPoints.count / 15)   // ~constant ~0.25s sweep
+                    let step = max(1, self.laserPoints.count / 30)   // ~0.5s sweep
                     self.laserPoints.removeFirst(min(step, self.laserPoints.count - 1))
                     self.needsDisplay = true
                 } else {
