@@ -13,7 +13,10 @@ struct ToolPaletteView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            tabBar
+            HStack(spacing: 6) {
+                tabBar
+                gearMenu
+            }
             Divider()
             tools
             Divider()
@@ -85,6 +88,45 @@ struct ToolPaletteView: View {
             .padding(.vertical, 1)
         }
         .frame(height: 26)
+    }
+
+    private var gearMenu: some View {
+        Menu {
+            Picker("When idle", selection: Binding(
+                get: { Double(Settings.idleBoardOpacity) },
+                set: { controller.setIdleOpacity?(CGFloat($0)) })) {
+                Text("Transparent").tag(0.0)
+                Text("Faint").tag(0.4)
+                Text("White board").tag(0.92)
+            }
+            Picker("When editing", selection: Binding(
+                get: { Double(Settings.editBoardOpacity) },
+                set: { controller.setEditOpacity?(CGFloat($0)) })) {
+                Text("Light wash").tag(0.85)
+                Text("Solid white").tag(1.0)
+                Text("Transparent").tag(0.0)
+            }
+            Toggle("Keep desktop icons", isOn: Binding(
+                get: { Settings.keepDesktopIcons },
+                set: { controller.setKeepIcons?($0) }))
+            Picker("Link color", selection: Binding(
+                get: { Settings.linkColor },
+                set: { controller.setLinkColorAction?($0) })) {
+                Text("Purple").tag("#6965db")
+                Text("Blue").tag("#1971c2")
+                Text("Green").tag("#2f9e44")
+                Text("Red").tag("#e03131")
+                Text("Orange").tag("#f08c00")
+                Text("Gray").tag("#868e96")
+                Text("Black").tag("#1e1e1e")
+            }
+        } label: {
+            Image(systemName: "gearshape").frame(width: 22, height: 22)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Settings")
     }
 
     private var tools: some View {

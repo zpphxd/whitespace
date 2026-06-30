@@ -39,6 +39,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         controller.linkFileAction = { [weak self] in self?.linkFile() }
+        controller.setIdleOpacity = { [weak self] v in
+            Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
+        }
+        controller.setEditOpacity = { [weak self] v in
+            Settings.editBoardOpacity = v; self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
+        }
+        controller.setKeepIcons = { [weak self] on in
+            Settings.keepDesktopIcons = on
+            if let self, self.window.isEditing { self.window.setEditing(true) }
+        }
+        controller.setLinkColorAction = { [weak self] hex in
+            Settings.linkColor = hex; self?.canvas.needsDisplay = true
+        }
 
         // Catch "/" app-wide (works whichever of our windows is key), except
         // while typing in a text field, so it always opens the file picker.

@@ -17,6 +17,12 @@ final class CanvasController: ObservableObject {
     var closeTab: ((Int) -> Void)?
     var linkFileAction: (() -> Void)?
 
+    // Settings actions (exposed via the palette gear menu).
+    var setIdleOpacity: ((CGFloat) -> Void)?
+    var setEditOpacity: ((CGFloat) -> Void)?
+    var setKeepIcons: ((Bool) -> Void)?
+    var setLinkColorAction: ((String) -> Void)?
+
     /// Set by the canvas; invoked by the inspector to push style onto selection.
     var applyStyleToSelection: (() -> Void)?
     var deleteSelection: (() -> Void)?
