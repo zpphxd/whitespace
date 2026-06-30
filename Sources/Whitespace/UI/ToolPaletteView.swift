@@ -24,7 +24,7 @@ struct ToolPaletteView: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
-        .frame(width: 332)
+        .frame(width: 356)
         .liquidGlassPanel(cornerRadius: 24)
     }
 
@@ -155,6 +155,14 @@ struct ToolPaletteView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Link a file, folder, or URL")
+
+            Button { controller.clearBoardAction?() } label: {
+                Image(systemName: "eraser")
+                    .frame(width: 25, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(.plain)
+            .help("Clear the board")
         }
     }
 

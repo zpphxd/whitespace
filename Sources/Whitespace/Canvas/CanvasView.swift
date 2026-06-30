@@ -469,6 +469,23 @@ final class CanvasView: NSView {
         renderer.invalidate(id)
     }
 
+    /// Clear everything on the current board (confirmed, undoable with ⌘Z).
+    func clearBoard() {
+        guard !scene.elements.isEmpty else { return }
+        let alert = NSAlert()
+        alert.messageText = "Clear this board?"
+        alert.informativeText = "Removes everything on the current board. You can undo with ⌘Z."
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        commitText()
+        scene.beginEdit()
+        renderer.invalidateAll()
+        scene.removeAllElements()
+        updateSelectionState()
+    }
+
     /// Called after switching boards: drop cached paths and clear selection UI.
     func boardDidChange() {
         renderer.invalidateAll()

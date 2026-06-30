@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         controller.linkFileAction = { [weak self] in self?.linkFile() }
         controller.linkURLAction = { [weak self] in self?.linkURL() }
+        controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setIdleOpacity = { [weak self] v in
             Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
         }

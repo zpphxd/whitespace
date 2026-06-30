@@ -78,6 +78,13 @@ final class Scene {
         notify()
     }
 
+    /// Remove every element (undoable — call `beginEdit()` first).
+    func removeAllElements() {
+        elements.removeAll()
+        selection.removeAll()
+        notify()
+    }
+
     func removeSelected() {
         guard !selection.isEmpty else { return }
         elements.removeAll { selection.contains($0.id) }
