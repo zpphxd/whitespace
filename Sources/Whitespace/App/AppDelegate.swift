@@ -74,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.selectTab = { [weak self] i in self?.selectBoard(i) }
         controller.renameTab = { [weak self] i, name in self?.renameBoard(i, name) }
         controller.closeTab = { [weak self] i in self?.closeBoard(i) }
+        controller.moveTab = { [weak self] from, to in self?.moveBoard(from, to) }
+        controller.exportTab = { [weak self] i, kind in self?.exportBoard(i, kind) }
 
         menuBar = MenuBarController(
             onToggleEdit: { [weak self] in self?.toggleEdit() },
@@ -212,6 +214,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.message = "Open an .excalidraw file as a new board"
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url { openExcalidraw(url) }
+    }
+
+    private func moveBoard(_ from: Int, _ to: Int) {
+        guard from != to, boards.indices.contains(from), boards.indices.contains(to) else { return }
+        boards[currentBoard].elements = scene.elements
+        let curId = boards[currentBoard].id
+        let moved = boards.remove(at: from)
+        boards.insert(moved, at: to)
+        currentBoard = boards.firstIndex { $0.id == curId } ?? to
+        controller.tabs = boards.map(\.name)
+        controller.currentTab = currentBoard
+        saveNow()
+    }
+
+    private func exportBoard(_ index: Int, _ kind: String) {
+        guard boards.indices.contains(index) else { return }
+        let elements = index == currentBoard ? scene.elements : boards[index].elements
+        guard Export.contentBounds(elements) != nil else {
+            let alert = NSAlert()
+            alert.messageText = "Nothing to export"
+            alert.informativeText = "“\(boards[index].name)” is empty."
+            alert.runModal(); return
+        }
+        let panel = NSSavePanel()
+        let isPNG = kind == "png"
+        panel.nameFieldStringValue = "\(boards[index].name).\(isPNG ? "png" : "svg")"
+        panel.allowedContentTypes = [isPNG ? .png : .svg]
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if isPNG { try? Export.png(elements)?.write(to: url, options: .atomic) }
+        else { try? Export.svg(elements)?.write(to: url, atomically: true, encoding: .utf8) }
     }
 
     private func renameBoard(_ index: Int, _ name: String) {

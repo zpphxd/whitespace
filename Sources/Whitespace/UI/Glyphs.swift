@@ -22,6 +22,29 @@ struct IconSegment<Value: Hashable>: View {
     }
 }
 
+/// A segmented control of text labels with a clear purple selection.
+struct TextSegment<Value: Hashable>: View {
+    let options: [(value: Value, label: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(options.indices, id: \.self) { i in
+                let opt = options[i]
+                Button { selection = opt.value } label: {
+                    Text(opt.label)
+                        .font(.system(size: 11, weight: selection == opt.value ? .semibold : .regular))
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                        .background(selection == opt.value ? Color(hex: 0x6965db) : Color.gray.opacity(0.12))
+                        .foregroundStyle(selection == opt.value ? .white : .primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 /// A horizontal line drawn solid / dashed / dotted.
 struct StrokeStyleGlyph: View {
     let style: StrokeStyle

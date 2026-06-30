@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Floating tool palette + inspector. Edits `CanvasController.style` and pushes
 /// changes onto the current selection.
@@ -71,8 +72,19 @@ struct ToolPaletteView: View {
                         // Single tap only — no double-tap gesture competing, so
                         // switching is instant. Rename via right-click.
                         .onTapGesture { controller.selectTab?(i) }
+                        .onDrag { NSItemProvider(object: String(i) as NSString) }
+                        .onDrop(of: [.text], isTargeted: nil) { providers in
+                            providers.first?.loadObject(ofClass: NSString.self) { obj, _ in
+                                if let s = obj as? String, let from = Int(s) {
+                                    DispatchQueue.main.async { controller.moveTab?(from, i) }
+                                }
+                            }
+                            return true
+                        }
                         .contextMenu {
                             Button("Rename") { renameText = name; editingTab = i }
+                            Button("Export as PNG…") { controller.exportTab?(i, "png") }
+                            Button("Export as SVG…") { controller.exportTab?(i, "svg") }
                             if controller.tabs.count > 1 {
                                 Button("Delete", role: .destructive) { controller.closeTab?(i) }
                             }
@@ -224,25 +236,22 @@ struct ToolPaletteView: View {
                             set: { controller.style.strokeStyle = $0; apply() }))
                     }
                     section("Sloppiness") {
-                        Picker("", selection: Binding<Double>(
+                        TextSegment(options: [
+                            (value: 0.0, label: "Architect"), (value: 1.0, label: "Artist"),
+                            (value: 2.0, label: "Cartoonist"),
+                        ], selection: Binding<Double>(
                             get: { controller.style.roughness },
-                            set: { controller.style.roughness = $0; apply() })) {
-                            Text("Architect").tag(0.0)
-                            Text("Artist").tag(1.0)
-                            Text("Cartoonist").tag(2.0)
-                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                            set: { controller.style.roughness = $0; apply() }))
                     }
                 }
             }
             Group {
                 if contextType == "rectangle" {
                     section("Edges") {
-                        Picker("", selection: Binding<Bool>(
-                            get: { controller.style.rounded },
-                            set: { controller.style.rounded = $0; apply() })) {
-                            Text("Sharp").tag(false)
-                            Text("Round").tag(true)
-                        }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+                        TextSegment(options: [(value: false, label: "Sharp"), (value: true, label: "Round")],
+                                    selection: Binding<Bool>(
+                                        get: { controller.style.rounded },
+                                        set: { controller.style.rounded = $0; apply() }))
                     }
                 }
                 if isArrow {

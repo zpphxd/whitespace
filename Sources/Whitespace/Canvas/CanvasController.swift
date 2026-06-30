@@ -16,6 +16,8 @@ final class CanvasController: ObservableObject {
     var selectTab: ((Int) -> Void)?
     var renameTab: ((Int, String) -> Void)?
     var closeTab: ((Int) -> Void)?
+    var moveTab: ((Int, Int) -> Void)?
+    var exportTab: ((Int, String) -> Void)?
     var linkFileAction: (() -> Void)?
     var linkURLAction: (() -> Void)?
     var insertImageAction: (() -> Void)?
