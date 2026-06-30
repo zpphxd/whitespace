@@ -1,7 +1,7 @@
 import Foundation
 
 enum Tool: String, CaseIterable {
-    case select, rectangle, ellipse, diamond, arrow, line, freedraw, text
+    case select, rectangle, ellipse, diamond, arrow, elbow, line, freedraw, text
 
     var creates: Bool { self != .select }
 
@@ -13,6 +13,7 @@ enum Tool: String, CaseIterable {
         case .ellipse: return "o"
         case .diamond: return "d"
         case .arrow: return "a"
+        case .elbow: return "e"
         case .line: return "l"
         case .freedraw: return "p"
         case .text: return "t"
@@ -26,9 +27,18 @@ enum Tool: String, CaseIterable {
         case .ellipse: return "circle"
         case .diamond: return "diamond"
         case .arrow: return "arrow.right"
+        case .elbow: return "arrow.turn.right.down"
         case .line: return "line.diagonal"
         case .freedraw: return "pencil"
         case .text: return "textformat"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .elbow: return "Elbow arrow (links shapes)"
+        case .arrow: return "Arrow (links shapes)"
+        default: return rawValue.capitalized
         }
     }
 }

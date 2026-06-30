@@ -11,6 +11,11 @@ if let idx = CommandLine.arguments.firstIndex(of: "--render-scene"),
     RenderScene.run(to: CommandLine.arguments[idx + 1])
     exit(0)
 }
+if let idx = CommandLine.arguments.firstIndex(of: "--export-test"),
+   idx + 1 < CommandLine.arguments.count {
+    ExportTest.run(to: CommandLine.arguments[idx + 1])
+    exit(0)
+}
 
 // Single-instance guard: a second copy can't register the global hotkeys (the
 // first holds them), which looks like "the hotkey stopped working." If another

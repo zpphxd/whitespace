@@ -16,6 +16,9 @@ final class CanvasView: NSView {
     /// Called after any scene mutation so the app can schedule an autosave.
     var onSceneChange: (() -> Void)?
 
+    /// Called when "/" is pressed — opens the file-link search palette.
+    var onSlashSearch: (() -> Void)?
+
     /// Whiteboard backdrop opacity per mode (1 = opaque white, 0 = wallpaper
     /// shows through). Defaults: idle is transparent so the desktop looks
     /// normal with drawings floating on it; edit mode shows a light board.
@@ -152,6 +155,15 @@ final class CanvasView: NSView {
         window?.makeFirstResponder(self)
         commitText()
         let p = scenePoint(event)
+
+        // Double-click a linked element (e.g. a file node) opens it.
+        if event.clickCount == 2,
+           let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
+           let link = hit.link, !link.isEmpty {
+            openLink(link)
+            return
+        }
+
         dragStart = p
         lastPanPoint = viewPoint(event)
 
@@ -164,8 +176,8 @@ final class CanvasView: NSView {
             beginText(at: p)
         } else if tool == .freedraw {
             beginFreedraw(at: p)
-        } else if tool == .line || tool == .arrow {
-            beginLine(at: p, type: tool == .arrow ? "arrow" : "line")
+        } else if tool == .line || tool == .arrow || tool == .elbow {
+            beginLine(at: p, type: tool == .line ? "line" : "arrow", elbow: tool == .elbow)
         } else {
             beginShape(at: p, type: tool.rawValue)
         }
@@ -198,6 +210,7 @@ final class CanvasView: NSView {
             for (id, origin) in origins {
                 scene.update(id: id) { e in e.x = origin.x + dx; e.y = origin.y + dy }
             }
+            rebuildArrowsBound(to: Set(origins.keys))
         case .resize(let id, let handle, let start):
             resize(id: id, handle: handle, start: start, to: p)
         case .marquee(let startScene):
@@ -221,8 +234,9 @@ final class CanvasView: NSView {
             marqueeRect = nil
             updateSelectionState()
             needsDisplay = true
-        case .freedraw, .line:
-            // Auto-revert to select after a one-shot draw, like Excalidraw's lock-off.
+        case .line(let id):
+            finalizeLine(id)
+        case .freedraw:
             break
         default:
             break
@@ -271,14 +285,72 @@ final class CanvasView: NSView {
         drag = .create(id: e.id)
     }
 
-    private func beginLine(at p: CGPoint, type: String) {
+    private func beginLine(at p: CGPoint, type: String, elbow: Bool = false) {
         scene.beginEdit()
         var e = makeElement(type: type, x: p.x, y: p.y, width: 0, height: 0)
         e.points = [[0, 0], [0, 0]]
         e.backgroundColor = "transparent"
+        e.elbowed = elbow
         if type == "arrow" { e.endArrowhead = "arrow" }
         scene.add(e)
         drag = .line(id: e.id)
+    }
+
+    /// On release, bind endpoints to any shapes under them and route the arrow.
+    private func finalizeLine(_ id: String) {
+        guard let arrow = scene.element(id) else { return }
+        let abs = arrow.absolutePoints
+        guard let start = abs.first, let end = abs.last else { return }
+        if hypot(end.x - start.x, end.y - start.y) < 4 { scene.remove(id: id); return }
+        let startShape = topShape(at: start, excluding: id)
+        let endShape = topShape(at: end, excluding: id)
+        scene.update(id: id) { el in
+            el.startBindingId = startShape?.id
+            el.endBindingId = endShape?.id
+        }
+        rebuildArrow(id)
+        scene.selection = [id]
+        controller.tool = .select
+        updateSelectionState()
+    }
+
+    private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image"]
+
+    private func topShape(at p: CGPoint, excluding excludeId: String) -> Element? {
+        for e in scene.elements.reversed()
+        where e.id != excludeId && connectableTypes.contains(e.type) && !e.locked {
+            if e.hitTest(p, tolerance: 4) { return e }
+        }
+        return nil
+    }
+
+    /// Recompute a bound arrow's endpoints (snapped to shape edges) + elbow route.
+    private func rebuildArrow(_ id: String) {
+        guard let arrow = scene.element(id), arrow.type == "arrow" || arrow.type == "line" else { return }
+        let abs = arrow.absolutePoints
+        guard var a = abs.first, var b = abs.last else { return }
+        let startShape = arrow.startBindingId.flatMap { scene.element($0) }
+        let endShape = arrow.endBindingId.flatMap { scene.element($0) }
+        let bCenter = endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? b
+        let aCenter = startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? a
+        if let s = startShape { a = ArrowBinding.edgePoint(of: s, toward: bCenter) }
+        if let e = endShape { b = ArrowBinding.edgePoint(of: e, toward: aCenter) }
+        let absPoints = arrow.elbowed ? ArrowBinding.elbowRoute(a, b) : [a, b]
+        scene.update(id: id) { el in
+            el.x = a.x; el.y = a.y
+            el.points = absPoints.map { [Double($0.x - a.x), Double($0.y - a.y)] }
+        }
+        renderer.invalidate(id)
+    }
+
+    /// Re-route any arrow bound to a shape that just moved (but not arrows that
+    /// are themselves being dragged).
+    private func rebuildArrowsBound(to movedIds: Set<String>) {
+        for e in scene.elements
+        where (e.type == "arrow" || e.type == "line") && !movedIds.contains(e.id) {
+            if let s = e.startBindingId, movedIds.contains(s) { rebuildArrow(e.id); continue }
+            if let en = e.endBindingId, movedIds.contains(en) { rebuildArrow(e.id) }
+        }
     }
 
     private func beginFreedraw(at p: CGPoint) {
@@ -316,6 +388,28 @@ final class CanvasView: NSView {
         scene.update(id: id) { e in
             e.x = r.minX; e.y = r.minY; e.width = r.width; e.height = r.height
         }
+    }
+
+    /// Drop a linked file node at the center of the current view.
+    func addFileNode(path: String) {
+        let name = (path as NSString).lastPathComponent
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "file", x: center.x - 90, y: center.y - 28, width: 180, height: 56)
+        e.text = name
+        e.link = path
+        e.backgroundColor = "#ffffff"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+    }
+
+    private func openLink(_ link: String) {
+        let url: URL? = link.contains("://")
+            ? URL(string: link)
+            : URL(fileURLWithPath: (link as NSString).expandingTildeInPath)
+        if let url { NSWorkspace.shared.open(url) }
     }
 
     private func makeElement(type: String, x: Double, y: Double, width: Double, height: Double) -> Element {
@@ -390,6 +484,7 @@ final class CanvasView: NSView {
     override func keyDown(with event: NSEvent) {
         guard isEditing else { return super.keyDown(with: event) }
         if event.keyCode == 49 { spaceDown = true; return } // space
+        if event.charactersIgnoringModifiers == "/" { onSlashSearch?(); return }
 
         let cmd = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)

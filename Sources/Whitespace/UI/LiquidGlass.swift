@@ -31,8 +31,10 @@ extension View {
     @ViewBuilder
     func liquidGlassPanel(cornerRadius: CGFloat = 26) -> some View {
         if #available(macOS 26.0, *) {
+            // Non-interactive: `.interactive()` reacts to the pointer with a
+            // scale/bounce that reads as a jumpy animation on a static palette.
             glassEffect(
-                .regular.interactive(),
+                .regular,
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
             // Keep the panel defined over ANY backdrop (incl. a flat white board,

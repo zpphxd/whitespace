@@ -40,6 +40,10 @@ struct Element: Codable, Identifiable, Equatable {
     var lastCommittedPoint: [Double]?
     var startArrowhead: String?
     var endArrowhead: String?
+    var elbowed: Bool = false
+    // Simple element-id bindings so arrows link shapes and follow them.
+    var startBindingId: String?
+    var endBindingId: String?
 
     // Text
     var text: String?
@@ -91,6 +95,9 @@ struct Element: Codable, Identifiable, Equatable {
         lastCommittedPoint: [Double]? = nil,
         startArrowhead: String? = nil,
         endArrowhead: String? = nil,
+        elbowed: Bool = false,
+        startBindingId: String? = nil,
+        endBindingId: String? = nil,
         text: String? = nil,
         fontSize: Double? = nil,
         fontFamily: Int? = nil,
@@ -111,6 +118,8 @@ struct Element: Codable, Identifiable, Equatable {
         self.link = link; self.locked = locked; self.index = index
         self.points = points; self.pressures = pressures; self.lastCommittedPoint = lastCommittedPoint
         self.startArrowhead = startArrowhead; self.endArrowhead = endArrowhead
+        self.elbowed = elbowed
+        self.startBindingId = startBindingId; self.endBindingId = endBindingId
         self.text = text; self.fontSize = fontSize; self.fontFamily = fontFamily
         self.textAlign = textAlign; self.verticalAlign = verticalAlign
         self.containerId = containerId; self.originalText = originalText; self.lineHeight = lineHeight
@@ -150,6 +159,9 @@ struct Element: Codable, Identifiable, Equatable {
         lastCommittedPoint = try? c.decodeIfPresent([Double].self, forKey: .lastCommittedPoint)
         startArrowhead = try? c.decodeIfPresent(String.self, forKey: .startArrowhead)
         endArrowhead = try? c.decodeIfPresent(String.self, forKey: .endArrowhead)
+        elbowed = d(.elbowed, false)
+        startBindingId = try? c.decodeIfPresent(String.self, forKey: .startBindingId)
+        endBindingId = try? c.decodeIfPresent(String.self, forKey: .endBindingId)
         text = try? c.decodeIfPresent(String.self, forKey: .text)
         fontSize = try? c.decodeIfPresent(Double.self, forKey: .fontSize)
         fontFamily = try? c.decodeIfPresent(Int.self, forKey: .fontFamily)

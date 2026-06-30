@@ -12,6 +12,8 @@ final class MenuBarController {
     private var setEditOpacity: ((CGFloat) -> Void)?
     private var toggleKeepIcons: ((Bool) -> Void)?
     private var togglePalette: (() -> Void)?
+    private var exportPNG: (() -> Void)?
+    private var exportSVG: (() -> Void)?
     private let paletteItem: NSMenuItem
 
     init(onToggleEdit: @escaping () -> Void,
@@ -19,13 +21,17 @@ final class MenuBarController {
          onSetIdleOpacity: @escaping (CGFloat) -> Void,
          onSetEditOpacity: @escaping (CGFloat) -> Void,
          onToggleKeepIcons: @escaping (Bool) -> Void,
-         onTogglePalette: @escaping () -> Void) {
+         onTogglePalette: @escaping () -> Void,
+         onExportPNG: @escaping () -> Void,
+         onExportSVG: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setIdleOpacity = onSetIdleOpacity
         self.setEditOpacity = onSetEditOpacity
         self.toggleKeepIcons = onToggleKeepIcons
         self.togglePalette = onTogglePalette
+        self.exportPNG = onExportPNG
+        self.exportSVG = onExportSVG
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -60,6 +66,14 @@ final class MenuBarController {
         keepIcons.state = Settings.keepDesktopIcons ? .on : .off
         menu.addItem(keepIcons)
         menu.addItem(makeBoardMenu())
+        menu.addItem(.separator())
+
+        let exportPNGItem = NSMenuItem(title: "Export as PNG…", action: #selector(exportPNGItemAction), keyEquivalent: "")
+        exportPNGItem.target = self
+        menu.addItem(exportPNGItem)
+        let exportSVGItem = NSMenuItem(title: "Export as SVG…", action: #selector(exportSVGItemAction), keyEquivalent: "")
+        exportSVGItem.target = self
+        menu.addItem(exportSVGItem)
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Whitespace", action: nil, keyEquivalent: "q")
@@ -140,6 +154,8 @@ final class MenuBarController {
     }
 
     @objc private func togglePaletteItem() { togglePalette?() }
+    @objc private func exportPNGItemAction() { exportPNG?() }
+    @objc private func exportSVGItemAction() { exportSVG?() }
     @objc private func toggleEdit() { onToggleEdit() }
     @objc private func quit(_ sender: Any?) { quitHandler?() }
 }

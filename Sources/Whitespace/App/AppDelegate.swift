@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var palette: PaletteWindow!
     private let controller = CanvasController()
     private var scene: Scene!
+    private var fileSearch: FileSearchWindow!
     private var paletteHidden = false
 
     private var autosaveItem: DispatchWorkItem?
@@ -28,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         palette = PaletteWindow(controller: controller)
 
+        fileSearch = FileSearchWindow()
+        fileSearch.onPick = { [weak self] path in self?.canvas.addFileNode(path: path) }
+        canvas.onSlashSearch = { [weak self] in self?.fileSearch.show() }
+
         menuBar = MenuBarController(
             onToggleEdit: { [weak self] in self?.toggleEdit() },
             onQuit: { [weak self] in self?.saveNow(); NSApp.terminate(nil) },
@@ -42,7 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self, self.window.isEditing else { return }
                 self.window.setEditing(true)
             },
-            onTogglePalette: { [weak self] in self?.togglePalette() }
+            onTogglePalette: { [weak self] in self?.togglePalette() },
+            onExportPNG: { [weak self] in self?.export(.png) },
+            onExportSVG: { [weak self] in self?.export(.svg) }
         )
 
         // System-wide hotkeys (one shared handler dispatches by id):
@@ -97,6 +105,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func saveNow() {
         DocumentStore.save(scene.elements, to: DocumentStore.defaultURL)
+    }
+
+    private enum ExportKind { case png, svg }
+
+    private func export(_ kind: ExportKind) {
+        guard Export.contentBounds(scene.elements) != nil else {
+            let alert = NSAlert()
+            alert.messageText = "Nothing to export"
+            alert.informativeText = "Draw something first, then export."
+            alert.runModal()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = kind == .png ? "whiteboard.png" : "whiteboard.svg"
+        panel.allowedContentTypes = [kind == .png ? .png : .svg]
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        switch kind {
+        case .png:
+            try? Export.png(scene.elements)?.write(to: url, options: .atomic)
+        case .svg:
+            try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 
     @objc private func screensChanged() {

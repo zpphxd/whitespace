@@ -37,57 +37,68 @@ struct ToolPaletteView: View {
         }
     }
 
-    @ViewBuilder
     private var inspector: some View {
-        Group {
-            label("Stroke")
-            swatchRow(strokeSwatches, selected: controller.style.strokeColor) {
-                controller.style.strokeColor = $0; apply()
-            }
-            label("Background")
-            swatchRow(bgSwatches, selected: controller.style.backgroundColor) {
-                controller.style.backgroundColor = $0; apply()
-            }
-            label("Fill")
-            Picker("", selection: Binding(
-                get: { controller.style.fillStyle },
-                set: { controller.style.fillStyle = $0; apply() })) {
-                ForEach(FillStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
-
-            label("Stroke width")
-            Slider(value: Binding(
-                get: { controller.style.strokeWidth },
-                set: { controller.style.strokeWidth = $0; apply() }), in: 1...8)
-
-            label("Roughness")
-            Picker("", selection: Binding(
-                get: { controller.style.roughness },
-                set: { controller.style.roughness = $0; apply() })) {
-                Text("Architect").tag(0.0)
-                Text("Artist").tag(1.0)
-                Text("Cartoonist").tag(2.0)
-            }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
-
-            label("Text size — \(Int(controller.style.fontSize)) pt")
-            Slider(value: Binding(
-                get: { controller.style.fontSize },
-                set: { controller.style.fontSize = $0; apply() }), in: 8...72)
-
-            if controller.hasSelection {
-                HStack {
-                    Button(role: .destructive) { controller.deleteSelection?() } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    Spacer()
-                    Button { controller.sendSelectionToBack?() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
-                    Button { controller.bringSelectionToFront?() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+        VStack(alignment: .leading, spacing: 12) {
+            section("Stroke") {
+                swatchRow(strokeSwatches, selected: controller.style.strokeColor) {
+                    controller.style.strokeColor = $0; apply()
                 }
-                .buttonStyle(.bordered)
-                .padding(.top, 4)
             }
+            section("Background") {
+                swatchRow(bgSwatches, selected: controller.style.backgroundColor) {
+                    controller.style.backgroundColor = $0; apply()
+                }
+            }
+            section("Fill") {
+                Picker("", selection: Binding<FillStyle>(
+                    get: { controller.style.fillStyle },
+                    set: { controller.style.fillStyle = $0; apply() })) {
+                    ForEach(FillStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            section("Stroke width") {
+                Slider(value: Binding(
+                    get: { controller.style.strokeWidth },
+                    set: { controller.style.strokeWidth = $0; apply() }), in: 1...8)
+            }
+            section("Roughness") {
+                Picker("", selection: Binding<Double>(
+                    get: { controller.style.roughness },
+                    set: { controller.style.roughness = $0; apply() })) {
+                    Text("Architect").tag(0.0)
+                    Text("Artist").tag(1.0)
+                    Text("Cartoonist").tag(2.0)
+                }.labelsHidden().pickerStyle(.segmented).frame(maxWidth: .infinity)
+            }
+            section("Text size — \(Int(controller.style.fontSize)) pt") {
+                Slider(value: Binding(
+                    get: { controller.style.fontSize },
+                    set: { controller.style.fontSize = $0; apply() }), in: 8...72)
+            }
+            if controller.hasSelection { actionsSection }
         }
         .font(.system(size: 12))
+    }
+
+    private func section<Content: View>(_ title: String,
+                                         @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            label(title)
+            content()
+        }
+    }
+
+    private var actionsSection: some View {
+        HStack {
+            Button(role: .destructive) { controller.deleteSelection?() } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Spacer()
+            Button { controller.sendSelectionToBack?() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
+            Button { controller.bringSelectionToFront?() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+        }
+        .buttonStyle(.bordered)
+        .padding(.top, 4)
     }
 
     private func label(_ t: String) -> some View {
