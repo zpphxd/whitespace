@@ -1030,6 +1030,20 @@ final class CanvasView: NSView {
                     e.width = Double(w) + 8
                     e.height = s.fontSize * 1.25
                 }
+                if e.type == "file" {
+                    e.fontSize = s.fontSize
+                    e.fontFamily = s.fontFamily
+                    // Compact link nodes (URLs) re-fit to the new font; file/folder
+                    // cards keep their box and just restyle the caption.
+                    let isCard = (e.link.map { !$0.contains("://") } ?? false)
+                    if !isCard {
+                        let font = Fonts.font(family: s.fontFamily, size: CGFloat(s.fontSize))
+                        let display = e.linkDisplayIcon + (e.text ?? "")
+                        let w = (display as NSString).size(withAttributes: [.font: font]).width
+                        e.width = Double(w) + 6
+                        e.height = s.fontSize * 1.3
+                    }
+                }
             }
             renderer.invalidate(id)
             if let el = scene.element(id), el.type == "arrow" || el.type == "line" { rebuildArrow(id) }

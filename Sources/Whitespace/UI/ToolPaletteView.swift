@@ -192,6 +192,8 @@ struct ToolPaletteView: View {
     private var showsFill: Bool { ["rectangle", "diamond", "ellipse", "line"].contains(contextType) }
     private var isArrow: Bool { contextType == "arrow" }
     private var isText: Bool { contextType == "text" }
+    /// Text and file/link/folder nodes both carry an editable label font.
+    private var isTextual: Bool { contextType == "text" || contextType == "file" }
     private var isStrokable: Bool { contextType != "text" && contextType != "file" }
 
     private var inspector: some View {
@@ -268,7 +270,7 @@ struct ToolPaletteView: View {
                         }
                     }
                 }
-                if isText {
+                if isTextual {
                     section("Font") {
                         Menu {
                             ForEach(Fonts.options) { opt in

@@ -216,7 +216,7 @@ final class ElementRenderer {
         if link.isEmpty || link.contains("://") {
             let name = e.linkDisplayIcon + (e.text ?? "file")
             let size = CGFloat(e.fontSize ?? 16)
-            let font = Fonts.handDrawn(size: size)
+            let font = e.fontFamily.map { Fonts.font(family: $0, size: size) } ?? Fonts.handDrawn(size: size)
             let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
                 .withAlphaComponent(opacity)
             let line = CTLineCreateWithAttributedString(
@@ -265,9 +265,10 @@ final class ElementRenderer {
         // Filename. Fixed dark colors (not dynamic system colors, which can
         // resolve to nothing without an active appearance) on the white card.
         let name = e.text ?? (expanded as NSString).lastPathComponent
+        let nameFont = e.fontFamily.map { Fonts.font(family: $0, size: CGFloat(e.fontSize ?? 12)) }
+            ?? .systemFont(ofSize: 12, weight: .medium)
         drawCaption(name, at: CGPoint(x: r.minX + 10, y: r.maxY - 21), maxWidth: r.width - 20,
-                    font: .systemFont(ofSize: 12, weight: .medium),
-                    color: NSColor(white: 0.12, alpha: opacity), in: ctx)
+                    font: nameFont, color: NSColor(white: 0.12, alpha: opacity), in: ctx)
         // Subtitle: modified date, or a red "Missing" badge.
         let subtitle = exists ? modifiedDate(expanded) : "Missing"
         let subColor = exists ? NSColor(white: 0.5, alpha: opacity)
