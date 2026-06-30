@@ -73,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTogglePalette: { [weak self] in self?.togglePalette() },
             onExportPNG: { [weak self] in self?.export(.png) },
             onExportSVG: { [weak self] in self?.export(.svg) },
-            onLinkFile: { [weak self] in self?.linkFile() }
+            onLinkFile: { [weak self] in self?.linkFile() },
+            onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true }
         )
 
         // System-wide hotkeys (one shared handler dispatches by id):

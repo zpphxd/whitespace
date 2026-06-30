@@ -122,23 +122,17 @@ final class ElementRenderer {
     // MARK: File node (a linked box with a filename)
 
     private func drawFileNode(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
-        let style = RoughStyle(strokeWidth: max(e.strokeWidth, 1.5), roughness: e.roughness,
-                               fillStyle: .solid, strokeStyle: .solid, seed: e.seed, hasFill: true)
-        let drawable = RoughShapeFactory.rectangle(e.rect, style: style)
-        RoughRenderer.draw(drawable, stroke: NSColor(hex: 0x1971c2),
-                           fill: NSColor.white, opacity: opacity, in: ctx)
-
-        let name = "📄  " + (e.text ?? "file")
-        let font = Fonts.handDrawn(size: 15)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font, .foregroundColor: NSColor(hex: 0x1e1e1e).withAlphaComponent(opacity),
-        ]
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: name, attributes: attrs))
+        // Transparent link: just "– name" in the configurable link color.
+        let name = "– " + (e.text ?? "file")
+        let size = CGFloat(e.fontSize ?? 16)
+        let font = Fonts.handDrawn(size: size)
+        let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
+            .withAlphaComponent(opacity)
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: name, attributes: [.font: font, .foregroundColor: color]))
         ctx.saveGState()
-        ctx.addRect(e.rect.insetBy(dx: 8, dy: 4))
-        ctx.clip()
         ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-        ctx.textPosition = CGPoint(x: e.x + 12, y: e.y + e.height / 2 + 5)
+        ctx.textPosition = CGPoint(x: e.x, y: e.y + size)
         CTLineDraw(line, ctx)
         ctx.restoreGState()
     }

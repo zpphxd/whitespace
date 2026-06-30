@@ -15,6 +15,7 @@ final class MenuBarController {
     private var exportPNG: (() -> Void)?
     private var exportSVG: (() -> Void)?
     private var linkFile: (() -> Void)?
+    private var setLinkColor: ((String) -> Void)?
     private let paletteItem: NSMenuItem
 
     init(onToggleEdit: @escaping () -> Void,
@@ -25,7 +26,8 @@ final class MenuBarController {
          onTogglePalette: @escaping () -> Void,
          onExportPNG: @escaping () -> Void,
          onExportSVG: @escaping () -> Void,
-         onLinkFile: @escaping () -> Void) {
+         onLinkFile: @escaping () -> Void,
+         onSetLinkColor: @escaping (String) -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setIdleOpacity = onSetIdleOpacity
@@ -35,6 +37,7 @@ final class MenuBarController {
         self.exportPNG = onExportPNG
         self.exportSVG = onExportSVG
         self.linkFile = onLinkFile
+        self.setLinkColor = onSetLinkColor
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -74,6 +77,7 @@ final class MenuBarController {
         let linkItem = NSMenuItem(title: "Link File…", action: #selector(linkFileAction), keyEquivalent: "")
         linkItem.target = self
         menu.addItem(linkItem)
+        menu.addItem(makeLinkColorMenu())
         menu.addItem(.separator())
 
         let exportPNGItem = NSMenuItem(title: "Export as PNG…", action: #selector(exportPNGItemAction), keyEquivalent: "")
@@ -159,6 +163,31 @@ final class MenuBarController {
 
     func setPaletteHidden(_ hidden: Bool) {
         paletteItem.title = hidden ? "Show Palette" : "Hide Palette"
+    }
+
+    private func makeLinkColorMenu() -> NSMenuItem {
+        let item = NSMenuItem(title: "Link Color", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let colors: [(String, String)] = [
+            ("Purple", "#6965db"), ("Blue", "#1971c2"), ("Green", "#2f9e44"),
+            ("Red", "#e03131"), ("Orange", "#f08c00"), ("Gray", "#868e96"), ("Black", "#1e1e1e"),
+        ]
+        for (name, hex) in colors {
+            let i = NSMenuItem(title: name, action: #selector(linkColorItem(_:)), keyEquivalent: "")
+            i.target = self
+            i.representedObject = hex
+            i.state = Settings.linkColor.lowercased() == hex ? .on : .off
+            sub.addItem(i)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func linkColorItem(_ sender: NSMenuItem) {
+        guard let hex = sender.representedObject as? String else { return }
+        Settings.linkColor = hex
+        setLinkColor?(hex)
+        sender.menu?.items.forEach { $0.state = ($0.representedObject as? String) == hex ? .on : .off }
     }
 
     @objc private func togglePaletteItem() { togglePalette?() }

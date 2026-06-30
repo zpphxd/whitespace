@@ -10,6 +10,13 @@ enum Settings {
         static let idleOpacity = "idleBoardOpacity"
         static let editOpacity = "editBoardOpacity"
         static let keepIcons = "keepDesktopIcons"
+        static let linkColor = "linkColor"
+    }
+
+    /// Color used to render linked file/folder nodes (just "– name" text).
+    static var linkColor: String {
+        get { defaults.string(forKey: Key.linkColor) ?? "#6965db" }
+        set { defaults.set(newValue, forKey: Key.linkColor) }
     }
 
     /// When true, the board never rises above the Finder desktop-icon layer, so

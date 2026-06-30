@@ -480,14 +480,18 @@ final class CanvasView: NSView {
 
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
-        Log.write("addFileNode \(path) editing=\(isEditing)")
         let name = (path as NSString).lastPathComponent
+        let size = 16.0
+        let display = "– " + name
+        let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
-        var e = makeElement(type: "file", x: center.x - 90, y: center.y - 28, width: 180, height: 56)
+        var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
+                            width: Double(width) + 4, height: size * 1.3)
         e.text = name
         e.link = path
-        e.backgroundColor = "#ffffff"
+        e.backgroundColor = "transparent"
+        e.fontSize = size
         scene.add(e)
         scene.selection = [e.id]
         controller.tool = .select

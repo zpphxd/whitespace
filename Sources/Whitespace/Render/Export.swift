@@ -72,6 +72,11 @@ enum Export {
                 s += line.htmlEscaped + "</text>\n"
             }
             return s
+        case "file":
+            let size = e.fontSize ?? 16
+            let color = Settings.linkColor
+            let display = "– " + (e.text ?? "file")
+            return "<text x=\"\(num(e.x))\" y=\"\(num(e.y + size))\" font-family=\"Bradley Hand, cursive\" font-size=\"\(num(size))\" fill=\"\(color)\" opacity=\"\(num(opacity))\">\(display.htmlEscaped)</text>\n"
         case "freedraw":
             let d = svgData(freehandPath(e))
             return "<path d=\"\(d)\" stroke=\"\(stroke)\" fill=\"none\" stroke-width=\"\(num(max(e.strokeWidth,1) * 1.5))\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"\(num(opacity))\"/>\n"
