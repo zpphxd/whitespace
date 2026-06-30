@@ -1,0 +1,35 @@
+import Foundation
+
+/// User-configurable preferences, persisted in `UserDefaults`. Exposed in the
+/// menu-bar menu so the board appearance can be flipped without a rebuild.
+/// Caseless enum (no stored state) — every value reads/writes UserDefaults.
+enum Settings {
+    private static var defaults: UserDefaults { .standard }
+
+    private enum Key {
+        static let idleOpacity = "idleBoardOpacity"
+        static let editOpacity = "editBoardOpacity"
+        static let keepIcons = "keepDesktopIcons"
+    }
+
+    /// When true, the board never rises above the Finder desktop-icon layer, so
+    /// your folders stay visible. Tradeoff: while editing below the icon layer,
+    /// clicks on empty desktop go to Finder, so drawing is limited — best used
+    /// as a "view my notes among my icons" mode.
+    static var keepDesktopIcons: Bool {
+        get { defaults.bool(forKey: Key.keepIcons) }
+        set { defaults.set(newValue, forKey: Key.keepIcons) }
+    }
+
+    /// Backdrop opacity when not editing. 0 = drawings float on the wallpaper.
+    static var idleBoardOpacity: CGFloat {
+        get { defaults.object(forKey: Key.idleOpacity) as? CGFloat ?? 0.0 }
+        set { defaults.set(newValue, forKey: Key.idleOpacity) }
+    }
+
+    /// Backdrop opacity while editing. A light wash so it reads as a canvas.
+    static var editBoardOpacity: CGFloat {
+        get { defaults.object(forKey: Key.editOpacity) as? CGFloat ?? 0.85 }
+        set { defaults.set(newValue, forKey: Key.editOpacity) }
+    }
+}

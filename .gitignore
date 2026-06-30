@@ -1,0 +1,13 @@
+# Swift / SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Built app bundle (produced by make_app.sh)
+Whitespace.app/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
