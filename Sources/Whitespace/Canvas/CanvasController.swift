@@ -24,6 +24,7 @@ final class CanvasController: ObservableObject {
     var setEditOpacity: ((CGFloat) -> Void)?
     var setKeepIcons: ((Bool) -> Void)?
     var setLinkColorAction: ((String) -> Void)?
+    var openShortcutsAction: (() -> Void)?
 
     /// Set by the canvas; invoked by the inspector to push style onto selection.
     var applyStyleToSelection: (() -> Void)?

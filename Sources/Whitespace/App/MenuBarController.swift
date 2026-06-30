@@ -16,6 +16,7 @@ final class MenuBarController {
     private var exportSVG: (() -> Void)?
     private var linkFile: (() -> Void)?
     private var setLinkColor: ((String) -> Void)?
+    private var openFile: (() -> Void)?
     private let paletteItem: NSMenuItem
 
     init(onToggleEdit: @escaping () -> Void,
@@ -27,7 +28,8 @@ final class MenuBarController {
          onExportPNG: @escaping () -> Void,
          onExportSVG: @escaping () -> Void,
          onLinkFile: @escaping () -> Void,
-         onSetLinkColor: @escaping (String) -> Void) {
+         onSetLinkColor: @escaping (String) -> Void,
+         onOpenFile: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setIdleOpacity = onSetIdleOpacity
@@ -38,6 +40,7 @@ final class MenuBarController {
         self.exportSVG = onExportSVG
         self.linkFile = onLinkFile
         self.setLinkColor = onSetLinkColor
+        self.openFile = onOpenFile
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -78,6 +81,11 @@ final class MenuBarController {
         linkItem.target = self
         menu.addItem(linkItem)
         menu.addItem(makeLinkColorMenu())
+        menu.addItem(.separator())
+
+        let openItem = NSMenuItem(title: "Open .excalidraw…", action: #selector(openFileAction), keyEquivalent: "")
+        openItem.target = self
+        menu.addItem(openItem)
         menu.addItem(.separator())
 
         let exportPNGItem = NSMenuItem(title: "Export as PNG…", action: #selector(exportPNGItemAction), keyEquivalent: "")
@@ -194,6 +202,7 @@ final class MenuBarController {
     @objc private func exportPNGItemAction() { exportPNG?() }
     @objc private func exportSVGItemAction() { exportSVG?() }
     @objc private func linkFileAction() { linkFile?() }
+    @objc private func openFileAction() { openFile?() }
     @objc private func toggleEdit() { onToggleEdit() }
     @objc private func quit(_ sender: Any?) { quitHandler?() }
 }

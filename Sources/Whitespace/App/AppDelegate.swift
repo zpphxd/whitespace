@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var boards: [BoardDoc] = []
     private var currentBoard = 0
+    private var shortcuts: ShortcutsWindow!
 
     private var autosaveItem: DispatchWorkItem?
 
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         palette = PaletteWindow(controller: controller)
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
+        canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
         controller.linkFileAction = { [weak self] in self?.linkFile() }
         controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
@@ -89,19 +91,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onExportPNG: { [weak self] in self?.export(.png) },
             onExportSVG: { [weak self] in self?.export(.svg) },
             onLinkFile: { [weak self] in self?.linkFile() },
-            onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true }
+            onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true },
+            onOpenFile: { [weak self] in self?.openExcalidrawFile() }
         )
 
-        // System-wide hotkeys (one shared handler dispatches by id):
-        // ⌥⌘W toggles the whiteboard, ⌥⌘Q hides the palette.
-        HotKeyCenter.shared.register(id: 1, keyCode: UInt32(kVK_ANSI_W),
-                                     modifiers: UInt32(cmdKey | optionKey)) { [weak self] in
-            self?.toggleEdit()
-        }
-        HotKeyCenter.shared.register(id: 2, keyCode: UInt32(kVK_ANSI_Q),
-                                     modifiers: UInt32(cmdKey | optionKey)) { [weak self] in
-            self?.togglePalette()
-        }
+        registerHotKeys()
+        shortcuts = ShortcutsWindow()
+        shortcuts.onChange = { [weak self] in self?.registerHotKeys() }
+        controller.openShortcutsAction = { [weak self] in self?.shortcuts.show() }
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
@@ -111,6 +108,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // border appear); otherwise a menu-bar app with a transparent idle
         // board looks like nothing happened.
         toggleEdit()
+    }
+
+    private func registerHotKeys() {
+        HotKeyCenter.shared.register(id: 1, keyCode: Settings.editKeyCode,
+                                     modifiers: Settings.editMods) { [weak self] in self?.toggleEdit() }
+        HotKeyCenter.shared.register(id: 2, keyCode: Settings.paletteKeyCode,
+                                     modifiers: Settings.paletteMods) { [weak self] in self?.togglePalette() }
     }
 
     /// The screen the cursor is currently on (the desktop the user is using).
@@ -180,6 +184,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.tabs = boards.map(\.name)
         controller.currentTab = currentBoard
         saveNow()
+    }
+
+    /// Open a `.excalidraw` file as a new board.
+    private func openExcalidraw(_ url: URL) {
+        let elements = DocumentStore.load(from: url)
+        boards[currentBoard].elements = scene.elements
+        let name = url.deletingPathExtension().lastPathComponent
+        boards.append(BoardDoc(name: name.isEmpty ? "Opened" : name, elements: elements))
+        currentBoard = boards.count - 1
+        scene.load(elements)
+        canvas.boardDidChange()
+        controller.tabs = boards.map(\.name)
+        controller.currentTab = currentBoard
+        saveNow()
+    }
+
+    private func openExcalidrawFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        if let t = UTType(filenameExtension: "excalidraw") {
+            panel.allowedContentTypes = [t, .json]
+        }
+        panel.message = "Open an .excalidraw file as a new board"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url { openExcalidraw(url) }
     }
 
     private func renameBoard(_ index: Int, _ name: String) {

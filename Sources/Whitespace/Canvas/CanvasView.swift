@@ -19,6 +19,9 @@ final class CanvasView: NSView {
     /// Called when "/" is pressed — opens the file-link search palette.
     var onSlashSearch: (() -> Void)?
 
+    /// Called when a `.excalidraw` file is dropped/opened — load it as a board.
+    var onOpenFile: ((URL) -> Void)?
+
     /// Whiteboard backdrop opacity per mode (1 = opaque white, 0 = wallpaper
     /// shows through). Defaults: idle is transparent so the desktop looks
     /// normal with drawings floating on it; edit mode shows a light board.
@@ -56,7 +59,29 @@ final class CanvasView: NSView {
             self?.needsDisplay = true
             self?.onSceneChange?()
         }
+        registerForDraggedTypes([.fileURL])
         wireController()
+    }
+
+    // MARK: Drag-and-drop (files / .excalidraw)
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        isEditing ? .copy : []
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
+              !urls.isEmpty else { return false }
+        let scenePt = camera.viewToScene(convert(sender.draggingLocation, from: nil))
+        for (i, url) in urls.enumerated() {
+            let p = CGPoint(x: scenePt.x, y: scenePt.y + CGFloat(i) * 28)
+            if url.pathExtension.lowercased() == "excalidraw" {
+                onOpenFile?(url)
+            } else {
+                addLink(link: url.path, name: url.lastPathComponent, at: p)
+            }
+        }
+        return true
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -517,8 +542,8 @@ final class CanvasView: NSView {
         addLink(link: path, name: (path as NSString).lastPathComponent)
     }
 
-    /// Drop a link node (file/folder/URL) at the center of the current view.
-    func addLink(link: String, name: String) {
+    /// Drop a link node (file/folder/URL) at a scene point (default view center).
+    func addLink(link: String, name: String, at point: CGPoint? = nil) {
         let size = 16.0
         let isURL = link.contains("://")
         var isDir: ObjCBool = false
@@ -526,7 +551,7 @@ final class CanvasView: NSView {
         let icon = isURL ? "🔗 " : (isDir.boolValue ? "📁 " : "📄 ")
         let display = icon + name
         let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
-        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        let center = point ?? camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
         var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
                             width: Double(width) + 6, height: size * 1.3)

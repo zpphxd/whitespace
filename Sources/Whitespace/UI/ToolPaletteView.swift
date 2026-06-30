@@ -120,6 +120,8 @@ struct ToolPaletteView: View {
                 Text("Gray").tag("#868e96")
                 Text("Black").tag("#1e1e1e")
             }
+            Divider()
+            Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
         } label: {
             Image(systemName: "gearshape").frame(width: 22, height: 22)
         }

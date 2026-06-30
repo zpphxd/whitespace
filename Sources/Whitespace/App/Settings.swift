@@ -1,4 +1,5 @@
 import Foundation
+import Carbon.HIToolbox
 
 /// User-configurable preferences, persisted in `UserDefaults`. Exposed in the
 /// menu-bar menu so the board appearance can be flipped without a rebuild.
@@ -11,6 +12,26 @@ enum Settings {
         static let editOpacity = "editBoardOpacity"
         static let keepIcons = "keepDesktopIcons"
         static let linkColor = "linkColor"
+        static let editKeyCode = "editKeyCode", editMods = "editMods"
+        static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
+    }
+
+    // Global hotkeys (Carbon keyCode + modifier mask). Defaults: ⌥⌘W / ⌥⌘Q.
+    static var editKeyCode: UInt32 {
+        get { defaults.object(forKey: Key.editKeyCode) == nil ? UInt32(kVK_ANSI_W) : UInt32(defaults.integer(forKey: Key.editKeyCode)) }
+        set { defaults.set(Int(newValue), forKey: Key.editKeyCode) }
+    }
+    static var editMods: UInt32 {
+        get { defaults.object(forKey: Key.editMods) == nil ? UInt32(cmdKey | optionKey) : UInt32(defaults.integer(forKey: Key.editMods)) }
+        set { defaults.set(Int(newValue), forKey: Key.editMods) }
+    }
+    static var paletteKeyCode: UInt32 {
+        get { defaults.object(forKey: Key.paletteKeyCode) == nil ? UInt32(kVK_ANSI_Q) : UInt32(defaults.integer(forKey: Key.paletteKeyCode)) }
+        set { defaults.set(Int(newValue), forKey: Key.paletteKeyCode) }
+    }
+    static var paletteMods: UInt32 {
+        get { defaults.object(forKey: Key.paletteMods) == nil ? UInt32(cmdKey | optionKey) : UInt32(defaults.integer(forKey: Key.paletteMods)) }
+        set { defaults.set(Int(newValue), forKey: Key.paletteMods) }
     }
 
     /// Color used to render linked file/folder nodes (just "– name" text).
