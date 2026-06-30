@@ -147,28 +147,41 @@ final class ElementRenderer {
 
     private func drawText(_ e: Element, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
         guard let text = e.text, !text.isEmpty else { return }
-        let size = CGFloat(e.fontSize ?? 20)
+        let baseSize = CGFloat(e.fontSize ?? 20)
+        let lines = text.components(separatedBy: "\n")
+
+        // Shrink-to-fit: keep the set font size unless the box is too small for
+        // the text — then scale DOWN to fit (never up). Box bigger = same size.
+        var scale: CGFloat = 1
+        let baseFont = Fonts.handDrawn(size: baseSize)
+        let naturalWidth = lines.map { ($0 as NSString).size(withAttributes: [.font: baseFont]).width }.max() ?? 0
+        if e.width > 1, naturalWidth > 0 {
+            scale = min(scale, (CGFloat(e.width) - 6) / naturalWidth)
+        }
+        let naturalHeight = baseSize * 1.25 * CGFloat(lines.count)
+        if e.height > 1, naturalHeight > 0 {
+            scale = min(scale, CGFloat(e.height) / naturalHeight)
+        }
+        scale = max(0.05, min(1, scale))
+
+        let size = baseSize * scale
         let font = Fonts.handDrawn(size: size)
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: color.withAlphaComponent(opacity),
+            .font: font, .foregroundColor: color.withAlphaComponent(opacity),
         ]
-        let attr = NSAttributedString(string: text, attributes: attrs)
 
         ctx.saveGState()
         // Core Text draws upward; flip within the element's box so it reads
         // top-down in our flipped scene space.
         let lineHeight = CGFloat(e.lineHeight ?? 1.25) * size
         var ty = e.y + lineHeight - size * 0.2
-        for line in text.components(separatedBy: "\n") {
-            let lineAttr = NSAttributedString(string: line, attributes: attrs)
-            let ctLine = CTLineCreateWithAttributedString(lineAttr)
+        for line in lines {
+            let ctLine = CTLineCreateWithAttributedString(NSAttributedString(string: line, attributes: attrs))
             ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
             ctx.textPosition = CGPoint(x: e.x, y: ty)
             CTLineDraw(ctLine, ctx)
             ty += lineHeight
         }
-        _ = attr
         ctx.restoreGState()
     }
 }

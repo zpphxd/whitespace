@@ -444,15 +444,10 @@ final class CanvasView: NSView {
         guard let element = scene.element(id) else { return }
         switch element.type {
         case "text":
-            // Scale the font with the box height so text resizes to fit.
-            let ratio = start.height > 1 ? Double(r.height / start.height) : 1
-            let newSize = max(6, (element.fontSize ?? 20) * ratio)
-            let font = Fonts.handDrawn(size: CGFloat(newSize))
-            let w = ((element.text ?? "") as NSString).size(withAttributes: [.font: font]).width
+            // Resize the BOX only — keep the font size. The renderer shrinks the
+            // text to fit if the box becomes too small (it never scales up).
             scene.update(id: id) { e in
-                e.fontSize = newSize
-                e.x = r.minX; e.y = r.minY
-                e.width = Double(w) + 8; e.height = newSize * 1.25
+                e.x = r.minX; e.y = r.minY; e.width = r.width; e.height = r.height
             }
         case "freedraw":
             // Remap every point from the old bounding box to the new one.
