@@ -40,16 +40,23 @@ struct ToolPaletteView: View {
                             .onExitCommand { editingTab = nil }
                     } else {
                         let active = i == controller.currentTab
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Text(name)
                                 .font(.system(size: 11, weight: active ? .semibold : .regular))
                                 .lineLimit(1)
-                            if active && controller.tabs.count > 1 {
-                                Button { controller.closeTab?(i) } label: {
-                                    Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                            if active {
+                                Button { renameText = name; editingTab = i } label: {
+                                    Image(systemName: "pencil").font(.system(size: 9))
                                 }
                                 .buttonStyle(.plain)
-                                .help("Delete board")
+                                .help("Rename board")
+                                if controller.tabs.count > 1 {
+                                    Button { controller.closeTab?(i) } label: {
+                                        Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Delete board")
+                                }
                             }
                         }
                         .padding(.horizontal, 9).padding(.vertical, 3)
