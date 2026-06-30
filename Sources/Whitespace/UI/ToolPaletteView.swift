@@ -57,8 +57,9 @@ struct ToolPaletteView: View {
                         .foregroundStyle(active ? .white : .primary)
                         .clipShape(Capsule())
                         .contentShape(Capsule())
+                        // Single tap only — no double-tap gesture competing, so
+                        // switching is instant. Rename via right-click.
                         .onTapGesture { controller.selectTab?(i) }
-                        .onTapGesture(count: 2) { renameText = name; editingTab = i }
                         .contextMenu {
                             Button("Rename") { renameText = name; editingTab = i }
                             if controller.tabs.count > 1 {
