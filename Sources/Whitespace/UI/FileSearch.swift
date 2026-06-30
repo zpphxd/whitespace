@@ -37,6 +37,7 @@ final class FileSearchModel: ObservableObject {
 
 struct FileSearchView: View {
     @ObservedObject var model: FileSearchModel
+    @FocusState private var focused: Bool
     var onPick: (String) -> Void
     var onClose: () -> Void
 
@@ -46,6 +47,10 @@ struct FileSearchView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
                 .padding(14)
+                .focused($focused)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { focused = true }
+                }
                 .onChange(of: model.query) { _ in model.search() }
                 .onSubmit { if let first = model.results.first { onPick(first) } }
                 .onExitCommand { onClose() }

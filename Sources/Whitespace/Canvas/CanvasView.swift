@@ -624,6 +624,25 @@ final class CanvasView: NSView {
 
     // MARK: Keyboard
 
+    // Cmd-shortcuts arrive here (not keyDown). Without an app menu they'd
+    // otherwise be dropped. Returning true marks them handled.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isEditing, event.modifierFlags.contains(.command) else {
+            return super.performKeyEquivalent(with: event)
+        }
+        let shift = event.modifierFlags.contains(.shift)
+        switch event.charactersIgnoringModifiers {
+        case "z": shift ? scene.redo() : scene.undo()
+                  renderer.invalidateAll(); updateSelectionState(); return true
+        case "c": copySelection(); return true
+        case "x": copySelection(); deleteSelectionAction(); return true
+        case "v": paste(); return true
+        case "a": scene.selection = Set(scene.elements.map(\.id))
+                  updateSelectionState(); needsDisplay = true; return true
+        default: return super.performKeyEquivalent(with: event)
+        }
+    }
+
     override func keyDown(with event: NSEvent) {
         guard isEditing else { return super.keyDown(with: event) }
         if event.keyCode == 49 { spaceDown = true; return } // space
