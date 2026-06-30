@@ -113,8 +113,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleEdit()
     }
 
+    /// The screen the cursor is currently on (the desktop the user is using).
+    private static func activeScreen() -> NSScreen? {
+        let loc = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(loc, $0.frame, false) } ?? NSScreen.main
+    }
+
     private func toggleEdit() {
         let editing = !window.isEditing
+        if editing, let screen = Self.activeScreen() {
+            // Launch the whiteboard on whichever display the cursor is on.
+            window.fit(to: screen)
+        }
         window.setEditing(editing)
         canvas.isEditing = editing
         menuBar.setEditing(editing)

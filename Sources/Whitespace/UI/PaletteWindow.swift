@@ -33,8 +33,10 @@ final class PaletteWindow {
     func show() {
         panel.layoutIfNeeded()
         let size = panel.frame.size
-        if let screen = NSScreen.main {
-            // Docked to the left edge, vertically centered on the visible area.
+        // Dock to the left of whichever display the cursor is on.
+        let loc = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(loc, $0.frame, false) } ?? NSScreen.main
+        if let screen {
             let visible = screen.visibleFrame
             panel.setFrameOrigin(NSPoint(
                 x: visible.minX + 20,
