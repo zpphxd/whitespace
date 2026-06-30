@@ -51,9 +51,6 @@ enum ExportTest {
         var frame = Element(type: "frame", x: 430, y: 250, width: 220, height: 150, seed: 16)
         frame.text = "Frame 1"
         elements.append(frame)
-        var embed = Element(type: "embed", x: 680, y: 250, width: 240, height: 150, seed: 17)
-        embed.link = "https://github.com/zpphxd/whitespace"; embed.text = "github.com"
-        elements.append(embed)
 
         var image = Element(type: "image", x: 470, y: 60, width: 120, height: 120, seed: 13)
         image.link = "/Users/zachpowers/whitespace/AppIcon.png"

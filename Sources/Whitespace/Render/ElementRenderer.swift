@@ -53,8 +53,6 @@ final class ElementRenderer {
             drawImage(e, opacity: opacity, in: ctx)
         case "frame":
             drawFrame(e, in: ctx)
-        case "embed":
-            drawEmbed(e, opacity: opacity, in: ctx)
         case "freedraw":
             drawFreehand(e, color: stroke, opacity: opacity, in: ctx)
         default:
@@ -183,28 +181,6 @@ final class ElementRenderer {
         ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         ctx.textPosition = CGPoint(x: r.minX + 2, y: r.minY - 5)
         CTLineDraw(line, ctx)
-        ctx.restoreGState()
-    }
-
-    private func drawEmbed(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
-        let r = e.rect
-        ctx.saveGState()
-        ctx.setAlpha(opacity)
-        let path = CGPath(roundedRect: r, cornerWidth: 10, cornerHeight: 10, transform: nil)
-        ctx.addPath(path); ctx.setFillColor(NSColor.white.cgColor); ctx.fillPath()
-        ctx.addPath(path); ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor); ctx.setLineWidth(1.5); ctx.strokePath()
-        let title = "🌐  " + (e.text ?? "")
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: Fonts.handDrawn(size: 15), .foregroundColor: NSColor(hex: 0x1971c2),
-        ]
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: attrs))
-        let hint = CTLineCreateWithAttributedString(NSAttributedString(string: "double-click to open", attributes: [
-            .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.secondaryLabelColor]))
-        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-        ctx.textPosition = CGPoint(x: r.minX + 14, y: r.midY)
-        CTLineDraw(line, ctx)
-        ctx.textPosition = CGPoint(x: r.minX + 14, y: r.midY + 18)
-        CTLineDraw(hint, ctx)
         ctx.restoreGState()
     }
 

@@ -477,6 +477,29 @@ final class CanvasView: NSView {
         }
     }
 
+    // MARK: Frames (containers)
+
+    /// Ids of the elements that belong to the given frame.
+    private func frameMembers(_ frameId: String) -> Set<String> {
+        Set(scene.elements.filter { $0.frameId == frameId }.map(\.id))
+    }
+
+    /// Top-most frame whose rect contains the element's center, if any.
+    private func enclosingFrame(of e: Element) -> Element? {
+        let c = CGPoint(x: e.boundingRect.midX, y: e.boundingRect.midY)
+        return scene.elements.reversed().first { $0.type == "frame" && $0.id != e.id && $0.rect.contains(c) }
+    }
+
+    /// After a move/create, update each affected element's frame membership
+    /// based on whether it now sits inside a frame.
+    private func reassignFrameMembership(_ ids: Set<String>) {
+        for id in ids {
+            guard let e = scene.element(id), e.type != "frame", e.containerId == nil else { continue }
+            let newFrame = enclosingFrame(of: e)?.id
+            if e.frameId != newFrame { scene.update(id: id) { $0.frameId = newFrame } }
+        }
+    }
+
     /// All element ids sharing the hit element's outermost group (or just it).
     private func groupMembers(of e: Element) -> Set<String> {
         guard let gid = e.groupIds.last else { return [e.id] }
@@ -512,6 +535,8 @@ final class CanvasView: NSView {
         switch drag {
         case .create(let id):
             finalizeCreatedShape(id)
+        case .move(let origins):
+            reassignFrameMembership(Set(origins.keys))  // dropped into / out of a frame
         case .marquee:
             if let m = marqueeRect {
                 scene.selection = Set(scene.elements(in: m).map(\.id))
@@ -619,8 +644,13 @@ final class CanvasView: NSView {
             }
             updateSelectionState()
             scene.beginEdit()
+            // Moving a frame carries everything inside it.
+            var movingIds = scene.selection
+            for id in scene.selection where scene.element(id)?.type == "frame" {
+                movingIds.formUnion(frameMembers(id))
+            }
             let origins = Dictionary(uniqueKeysWithValues:
-                scene.elements.filter { scene.selection.contains($0.id) }.map { ($0.id, CGPoint(x: $0.x, y: $0.y)) })
+                scene.elements.filter { movingIds.contains($0.id) }.map { ($0.id, CGPoint(x: $0.x, y: $0.y)) })
             drag = .move(origins: origins)
         } else {
             if !shift { scene.selection.removeAll() }
@@ -737,6 +767,11 @@ final class CanvasView: NSView {
             if el.width < 0 { el.x += el.width; el.width = -el.width }
             if el.height < 0 { el.y += el.height; el.height = -el.height }
         }
+        if e.type == "frame" {
+            scene.sendToBack(id)            // frames sit behind their contents
+        } else {
+            reassignFrameMembership([id])   // drawn inside a frame → becomes a member
+        }
         scene.selection = [id]
         updateSelectionState()  // stay on the current tool for repeated drawing
     }
@@ -805,21 +840,6 @@ final class CanvasView: NSView {
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
         addLink(link: path, name: (path as NSString).lastPathComponent)
-    }
-
-    /// Drop a web-embed card (opens the URL on double-click).
-    func addEmbed(url: String) {
-        let host = URL(string: url)?.host ?? url
-        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
-        scene.beginEdit()
-        var e = makeElement(type: "embed", x: center.x - 130, y: center.y - 85, width: 260, height: 170)
-        e.link = url
-        e.text = host
-        e.backgroundColor = "#ffffff"
-        scene.add(e)
-        scene.selection = [e.id]
-        controller.tool = .select
-        updateSelectionState()
     }
 
     /// Insert an image element from a file path, sized to fit ~320pt.

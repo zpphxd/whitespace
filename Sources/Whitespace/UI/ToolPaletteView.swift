@@ -177,8 +177,6 @@ struct ToolPaletteView: View {
                 Button { controller.tool = .frame } label: { Label(Tool.frame.label, systemImage: Tool.frame.symbol) }
                 Button { controller.tool = .laser } label: { Label(Tool.laser.label, systemImage: Tool.laser.symbol) }
                 Button { controller.tool = .lasso } label: { Label(Tool.lasso.label, systemImage: Tool.lasso.symbol) }
-                Divider()
-                Button { controller.webEmbedAction?() } label: { Label("Web Embed…", systemImage: "globe") }
             } label: {
                 Image(systemName: "ellipsis.circle").frame(width: 25, height: 26)
             }

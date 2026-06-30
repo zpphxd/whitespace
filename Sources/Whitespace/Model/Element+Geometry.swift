@@ -54,7 +54,7 @@ extension Element {
         let box = boundingRect.insetBy(dx: -tolerance, dy: -tolerance)
         guard box.contains(p) else { return false }
         switch type {
-        case "rectangle", "diamond", "text", "image":
+        case "rectangle", "diamond", "text", "image", "frame":
             // Filled/box-like: bounding box hit is good enough.
             return true
         case "ellipse":
