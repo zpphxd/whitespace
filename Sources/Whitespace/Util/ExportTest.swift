@@ -10,7 +10,8 @@ enum ExportTest {
         rrect.roundness = Element.Roundness(type: 3)   // rounded + dashed
         elements.append(rrect)
         elements.append(Element(type: "ellipse", x: 280, y: 70, width: 150, height: 90,
-                                backgroundColor: "#b2f2bb", fillStyle: .solid, strokeStyle: .dotted, seed: 8))
+                                angle: 0.4, backgroundColor: "#b2f2bb", fillStyle: .solid,
+                                strokeStyle: .dotted, seed: 8))
         // Straight bound arrow from rect → ellipse, routed to their edges.
         let rectId = elements[0].id, ellId = elements[1].id
         var arrow = Element(type: "arrow", x: 0, y: 0, seed: 9,

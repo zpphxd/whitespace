@@ -39,7 +39,18 @@ extension Element {
     }
 
     /// Hit test in scene space, with tolerance for thin strokes/lines.
-    func hitTest(_ p: CGPoint, tolerance: CGFloat = 8) -> Bool {
+    func hitTest(_ rawPoint: CGPoint, tolerance: CGFloat = 8) -> Bool {
+        // Map the point into the element's unrotated frame.
+        let p: CGPoint
+        if abs(angle) > 0.0001 {
+            let bb = boundingRect
+            let c = CGPoint(x: bb.midX, y: bb.midY)
+            let s = sin(-angle), co = cos(-angle)
+            let dx = rawPoint.x - c.x, dy = rawPoint.y - c.y
+            p = CGPoint(x: c.x + dx * co - dy * s, y: c.y + dx * s + dy * co)
+        } else {
+            p = rawPoint
+        }
         let box = boundingRect.insetBy(dx: -tolerance, dy: -tolerance)
         guard box.contains(p) else { return false }
         switch type {

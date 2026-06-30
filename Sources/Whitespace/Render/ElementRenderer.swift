@@ -34,6 +34,16 @@ final class ElementRenderer {
         let stroke = NSColor.excalidraw(e.strokeColor) ?? NSColor(hex: 0x1e1e1e)
         let fill = NSColor.excalidraw(e.backgroundColor)
 
+        let rotated = abs(e.angle) > 0.0001
+        if rotated {
+            let bb = e.boundingRect
+            ctx.saveGState()
+            ctx.translateBy(x: bb.midX, y: bb.midY)
+            ctx.rotate(by: CGFloat(e.angle))
+            ctx.translateBy(x: -bb.midX, y: -bb.midY)
+        }
+        defer { if rotated { ctx.restoreGState() } }
+
         switch e.type {
         case "text":
             drawText(e, color: stroke, opacity: opacity, in: ctx)

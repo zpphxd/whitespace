@@ -41,6 +41,7 @@ final class CanvasView: NSView {
         case marquee(startScene: CGPoint)
         case pan
         case erase
+        case rotate(id: String, center: CGPoint, offset: CGFloat)
     }
     private var drag: Drag = .none
     private var dragStart: CGPoint = .zero
@@ -171,20 +172,60 @@ final class CanvasView: NSView {
             return
         }
 
-        let r = viewRect(bounds).insetBy(dx: -4, dy: -4)
-        ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
+        let purple = NSColor(hex: 0x6965db).cgColor
+        ctx.setStrokeColor(purple)
         ctx.setLineWidth(1.5)
-        ctx.stroke(r)
-        // Resize handles (single selection only).
-        if scene.selection.count == 1 {
-            for h in Handle.allCases {
-                let hr = handleRect(h, in: r)
-                ctx.setFillColor(NSColor.white.cgColor)
-                ctx.fill(hr)
-                ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
-                ctx.stroke(hr)
+
+        // Single non-linear element: rotated outline + rotation handle.
+        if scene.selection.count == 1, let e = scene.element(scene.selection.first!) {
+            let rect = e.boundingRect
+            let c = CGPoint(x: rect.midX, y: rect.midY)
+            let a = CGFloat(e.angle)
+            let cornersV = [
+                CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY),
+            ].map { camera.sceneToView(rotatePoint($0, around: c, by: a)) }
+            ctx.move(to: cornersV[0])
+            for i in 1..<4 { ctx.addLine(to: cornersV[i]) }
+            ctx.closePath(); ctx.strokePath()
+
+            // Resize handles only when unrotated (axis-aligned).
+            if abs(e.angle) < 0.0001 {
+                let r = viewRect(rect).insetBy(dx: -4, dy: -4)
+                for h in Handle.allCases {
+                    let hr = handleRect(h, in: r)
+                    ctx.setFillColor(NSColor.white.cgColor); ctx.fill(hr)
+                    ctx.setStrokeColor(purple); ctx.stroke(hr)
+                }
             }
+            // Rotation handle above the top edge.
+            let topMid = camera.sceneToView(rotatePoint(CGPoint(x: rect.midX, y: rect.minY), around: c, by: a))
+            let knob = rotationKnobView(for: e)
+            ctx.setStrokeColor(purple)
+            ctx.move(to: topMid); ctx.addLine(to: knob); ctx.strokePath()
+            let kr = CGRect(x: knob.x - 5, y: knob.y - 5, width: 10, height: 10)
+            ctx.setFillColor(NSColor.white.cgColor); ctx.fillEllipse(in: kr)
+            ctx.setStrokeColor(purple); ctx.strokeEllipse(in: kr)
+            return
         }
+
+        // Multi-selection: axis-aligned box.
+        let r = viewRect(bounds).insetBy(dx: -4, dy: -4)
+        ctx.stroke(r)
+    }
+
+    private func rotatePoint(_ p: CGPoint, around c: CGPoint, by angle: CGFloat) -> CGPoint {
+        let s = sin(angle), co = cos(angle)
+        let dx = p.x - c.x, dy = p.y - c.y
+        return CGPoint(x: c.x + dx * co - dy * s, y: c.y + dx * s + dy * co)
+    }
+
+    /// View-space position of an element's rotation knob.
+    private func rotationKnobView(for e: Element) -> CGPoint {
+        let rect = e.boundingRect
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let above = CGPoint(x: rect.midX, y: rect.minY - 26 / camera.zoom)
+        return camera.sceneToView(rotatePoint(above, around: c, by: CGFloat(e.angle)))
     }
 
     private func drawMarquee(in ctx: CGContext) {
@@ -296,6 +337,9 @@ final class CanvasView: NSView {
             needsDisplay = true
         case .erase:
             eraseAt(p)
+        case .rotate(let id, let center, let offset):
+            let a = atan2(p.y - center.y, p.x - center.x)
+            scene.update(id: id) { $0.angle = Double(a - offset) }
         case .none:
             break
         }
@@ -343,6 +387,17 @@ final class CanvasView: NSView {
     // MARK: Interactions
 
     private func beginSelectInteraction(at p: CGPoint, viewPt: CGPoint, shift: Bool) {
+        // Single non-linear element: grab the rotation knob.
+        if scene.selection.count == 1, let id = scene.selection.first,
+           let e = scene.element(id), e.type != "line", e.type != "arrow" {
+            let knob = rotationKnobView(for: e)
+            if hypot(viewPt.x - knob.x, viewPt.y - knob.y) <= 9 {
+                scene.beginEdit()
+                let c = CGPoint(x: e.boundingRect.midX, y: e.boundingRect.midY)
+                drag = .rotate(id: id, center: c, offset: atan2(p.y - c.y, p.x - c.x) - CGFloat(e.angle))
+                return
+            }
+        }
         // Single line/arrow: grab an endpoint handle to adjust it.
         if scene.selection.count == 1, let id = scene.selection.first,
            let e = scene.element(id), e.type == "line" || e.type == "arrow",
