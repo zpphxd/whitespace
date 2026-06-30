@@ -57,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.setLinkColorAction = { [weak self] hex in
             Settings.linkColor = hex; self?.canvas.needsDisplay = true
         }
+        controller.setLinkStyleAction = { [weak self] style in
+            Settings.linkStyle = style; self?.canvas.restyleFileNodes()
+        }
 
         // Catch "/" app-wide (works whichever of our windows is key), except
         // while typing in a text field, so it always opens the file picker.

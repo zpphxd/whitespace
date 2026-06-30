@@ -212,23 +212,35 @@ final class ElementRenderer {
 
     private func drawFileNode(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
         let link = e.link ?? ""
-        // URLs (and bare nodes) stay a compact icon + name in the link color.
-        if link.isEmpty || link.contains("://") {
-            let name = e.linkDisplayIcon + (e.text ?? "file")
-            let size = CGFloat(e.fontSize ?? 16)
-            let font = e.fontFamily.map { Fonts.font(family: $0, size: size) } ?? Fonts.handDrawn(size: size)
-            let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
-                .withAlphaComponent(opacity)
-            let line = CTLineCreateWithAttributedString(
-                NSAttributedString(string: name, attributes: [.font: font, .foregroundColor: color]))
-            ctx.saveGState()
-            ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-            ctx.textPosition = CGPoint(x: e.x, y: e.y + size)
-            CTLineDraw(line, ctx)
-            ctx.restoreGState()
+        let isFilePath = !link.isEmpty && !link.contains("://")
+        // "preview" renders real files as a QuickLook card; everything else is a
+        // compact label (icon + name, or just colored text).
+        if Settings.linkStyle == "preview" && isFilePath {
+            drawFileCard(e, path: link, opacity: opacity, in: ctx)
             return
         }
-        drawFileCard(e, path: link, opacity: opacity, in: ctx)
+        let textOnly = Settings.linkStyle == "text"
+        let name = (textOnly ? "" : e.linkDisplayIcon) + (e.text ?? "file")
+        let size = CGFloat(e.fontSize ?? 16)
+        let font = e.fontFamily.map { Fonts.font(family: $0, size: size) } ?? Fonts.handDrawn(size: size)
+        let color = (NSColor.excalidraw(Settings.linkColor) ?? NSColor(hex: 0x6965db))
+            .withAlphaComponent(opacity)
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: name, attributes: [.font: font, .foregroundColor: color]))
+        ctx.saveGState()
+        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        ctx.textPosition = CGPoint(x: e.x, y: e.y + size)
+        CTLineDraw(line, ctx)
+        // Underline in text mode to read like a hyperlink.
+        if textOnly {
+            let w = (name as NSString).size(withAttributes: [.font: font]).width
+            ctx.textMatrix = .identity
+            ctx.setStrokeColor(color.cgColor); ctx.setLineWidth(1)
+            ctx.move(to: CGPoint(x: e.x, y: e.y + size + 2))
+            ctx.addLine(to: CGPoint(x: e.x + w, y: e.y + size + 2))
+            ctx.strokePath()
+        }
+        ctx.restoreGState()
     }
 
     /// A Finder-style card: QuickLook thumbnail + filename + modified date.

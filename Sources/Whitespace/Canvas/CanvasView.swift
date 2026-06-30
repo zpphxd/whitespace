@@ -875,26 +875,58 @@ final class CanvasView: NSView {
 
     private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"]
 
-    /// Drop a link node at a scene point (default view center). Files and folders
-    /// become a Finder-style thumbnail card; URLs stay a compact icon + name.
+    /// Drop a link node at a scene point (default view center). How it renders —
+    /// QuickLook preview card, icon + name, or colored text — follows the
+    /// `Settings.linkStyle` preference (URLs are always compact).
     func addLink(link: String, name: String, at point: CGPoint? = nil) {
         let center = point ?? camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        let isFilePath = !link.contains("://")
         scene.beginEdit()
-        if link.contains("://") {
-            let size = 16.0
-            let display = "🔗 " + name
-            let width = (display as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
-            var e = makeElement(type: "file", x: center.x - Double(width) / 2, y: center.y - size / 2,
-                                width: Double(width) + 6, height: size * 1.3)
-            e.text = name; e.link = link; e.backgroundColor = "transparent"; e.fontSize = size
-            scene.add(e); scene.selection = [e.id]
-        } else {
+        if isFilePath && Settings.linkStyle == "preview" {
             let w = 150.0, h = 172.0
             var e = makeElement(type: "file", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h)
             e.text = name; e.link = link; e.backgroundColor = "#ffffff"
             scene.add(e); scene.selection = [e.id]
+        } else {
+            let size = 16.0
+            var e = makeElement(type: "file", x: center.x, y: center.y, width: 10, height: size * 1.3)
+            e.text = name; e.link = link; e.backgroundColor = "transparent"; e.fontSize = size
+            let label = (Settings.linkStyle == "text" ? "" : e.linkDisplayIcon) + name
+            let w = (label as NSString).size(withAttributes: [.font: Fonts.handDrawn(size: CGFloat(size))]).width
+            e.x = center.x - Double(w) / 2; e.y = center.y - size * 1.3 / 2; e.width = Double(w) + 6
+            scene.add(e); scene.selection = [e.id]
         }
         updateSelectionState()
+    }
+
+    /// Re-fit every file/link node to the current `Settings.linkStyle` (card vs
+    /// compact), so toggling the preference updates existing nodes too.
+    func restyleFileNodes() {
+        let style = Settings.linkStyle
+        scene.beginEdit()
+        for e in scene.elements where e.type == "file" {
+            let isFilePath = (e.link.map { !$0.contains("://") } ?? false)
+            let center = CGPoint(x: e.rect.midX, y: e.rect.midY)
+            if isFilePath && style == "preview" {
+                let w = 150.0, h = 172.0
+                scene.update(id: e.id) { el in
+                    el.x = center.x - w / 2; el.y = center.y - h / 2; el.width = w; el.height = h
+                    el.backgroundColor = "#ffffff"
+                }
+            } else {
+                let size = CGFloat(e.fontSize ?? 16)
+                let font = e.fontFamily.map { Fonts.font(family: $0, size: size) } ?? Fonts.handDrawn(size: size)
+                let label = (style == "text" ? "" : e.linkDisplayIcon) + (e.text ?? "")
+                let w = (label as NSString).size(withAttributes: [.font: font]).width
+                scene.update(id: e.id) { el in
+                    el.x = center.x - Double(w) / 2; el.y = center.y - Double(size) * 1.3 / 2
+                    el.width = Double(w) + 6; el.height = Double(size) * 1.3
+                    el.backgroundColor = "transparent"
+                }
+            }
+            renderer.invalidate(e.id)
+        }
+        needsDisplay = true
     }
 
     private func openLink(_ link: String) {

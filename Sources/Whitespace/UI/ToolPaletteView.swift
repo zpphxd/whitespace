@@ -129,6 +129,13 @@ struct ToolPaletteView: View {
                 Text("Gray").tag("#868e96")
                 Text("Black").tag("#1e1e1e")
             }
+            Picker("File links", selection: Binding(
+                get: { Settings.linkStyle },
+                set: { controller.setLinkStyleAction?($0) })) {
+                Text("Preview").tag("preview")
+                Text("Icon + name").tag("icon")
+                Text("Colored text").tag("text")
+            }
             Divider()
             Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
         } label: {

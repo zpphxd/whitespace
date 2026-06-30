@@ -12,6 +12,7 @@ enum Settings {
         static let editOpacity = "editBoardOpacity"
         static let keepIcons = "keepDesktopIcons"
         static let linkColor = "linkColor"
+        static let linkStyle = "linkStyle"
         static let editKeyCode = "editKeyCode", editMods = "editMods"
         static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
     }
@@ -38,6 +39,13 @@ enum Settings {
     static var linkColor: String {
         get { defaults.string(forKey: Key.linkColor) ?? "#6965db" }
         set { defaults.set(newValue, forKey: Key.linkColor) }
+    }
+
+    /// How file/folder link nodes render: "preview" (QuickLook card),
+    /// "icon" (icon + name), or "text" (colored, underlined name only).
+    static var linkStyle: String {
+        get { defaults.string(forKey: Key.linkStyle) ?? "preview" }
+        set { defaults.set(newValue, forKey: Key.linkStyle) }
     }
 
     /// When true, the board never rises above the Finder desktop-icon layer, so
