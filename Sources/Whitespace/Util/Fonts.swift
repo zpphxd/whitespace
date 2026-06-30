@@ -13,33 +13,33 @@ enum Fonts {
         return NSFont.systemFont(ofSize: size)
     }
 
-    /// Excalidraw-style font families: 1 hand-drawn, 2 normal, 3 code, 5 fancy.
+    /// A selectable font, shown by name in its own typeface in the picker.
+    struct Option: Identifiable {
+        let id: Int
+        let name: String
+        let psName: String  // PostScript/family name to load
+    }
+
+    /// Curated fonts that ship with macOS (so they always render).
+    static let options: [Option] = [
+        .init(id: 1, name: "Hand-drawn", psName: "Bradley Hand"),
+        .init(id: 9, name: "Chalkboard", psName: "Chalkboard SE"),
+        .init(id: 7, name: "Noteworthy", psName: "Noteworthy"),
+        .init(id: 6, name: "Marker Felt", psName: "Marker Felt"),
+        .init(id: 2, name: "Helvetica", psName: "Helvetica Neue"),
+        .init(id: 10, name: "Avenir Next", psName: "Avenir Next"),
+        .init(id: 11, name: "Georgia", psName: "Georgia"),
+        .init(id: 5, name: "Futura", psName: "Futura"),
+        .init(id: 8, name: "Snell Roundhand", psName: "SnellRoundhand"),
+        .init(id: 3, name: "Menlo (code)", psName: "Menlo"),
+    ]
+
+    static func option(_ id: Int) -> Option { options.first { $0.id == id } ?? options[0] }
+
     static func font(family: Int, size: CGFloat) -> NSFont {
-        switch family {
-        case 2: // Normal
-            return NSFont(name: "Nunito", size: size)
-                ?? NSFont(name: "Helvetica Neue", size: size)
-                ?? NSFont.systemFont(ofSize: size)
-        case 3: // Code / mono
-            return NSFont(name: "Comic Shanns Mono", size: size)
-                ?? NSFont(name: "Cascadia Code", size: size)
-                ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        case 5: // Fancy / display
-            return NSFont(name: "Lilita One", size: size)
-                ?? NSFont(name: "Futura", size: size)
-                ?? NSFont.systemFont(ofSize: size, weight: .black)
-        default: // 1 Hand-drawn
-            return handDrawn(size: size)
-        }
+        NSFont(name: option(family).psName, size: size) ?? handDrawn(size: size)
     }
 
     /// SVG font-family stack for export.
-    static func cssFamily(_ family: Int) -> String {
-        switch family {
-        case 2: return "Nunito, Helvetica, sans-serif"
-        case 3: return "Comic Shanns Mono, Cascadia Code, monospace"
-        case 5: return "Lilita One, Futura, sans-serif"
-        default: return "Bradley Hand, Chalkboard SE, cursive"
-        }
-    }
+    static func cssFamily(_ family: Int) -> String { "\(option(family).psName), sans-serif" }
 }

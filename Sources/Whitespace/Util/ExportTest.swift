@@ -34,7 +34,8 @@ enum ExportTest {
 
         // Narrow box to verify the text wraps to fit (not single-line/scaled).
         elements.append(Element(type: "text", x: 70, y: 320, width: 150, height: 90, seed: 10,
-                                text: "This text should wrap to fit the box width", fontSize: 20))
+                                text: "This text should wrap to fit the box width", fontSize: 20,
+                                fontFamily: 11))
 
         // Container-bound, centered text inside a rounded rectangle.
         var box = Element(type: "rectangle", x: 60, y: 430, width: 200, height: 90,

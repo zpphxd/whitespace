@@ -248,15 +248,23 @@ struct ToolPaletteView: View {
                     }
                 }
                 if isText {
-                    section("Font family") {
-                        IconSegment(options: [
-                            (value: 1, icon: AnyView(Image(systemName: "pencil"))),
-                            (value: 2, icon: AnyView(Image(systemName: "character"))),
-                            (value: 3, icon: AnyView(Image(systemName: "chevron.left.forwardslash.chevron.right"))),
-                            (value: 5, icon: AnyView(Image(systemName: "a.square"))),
-                        ], selection: Binding<Int>(
-                            get: { controller.style.fontFamily },
-                            set: { controller.style.fontFamily = $0; apply() }))
+                    section("Font") {
+                        Menu {
+                            ForEach(Fonts.options) { opt in
+                                Button { controller.style.fontFamily = opt.id; apply() } label: {
+                                    Text(opt.name).font(.custom(opt.psName, size: 14))
+                                }
+                            }
+                        } label: {
+                            let cur = Fonts.option(controller.style.fontFamily)
+                            Text(cur.name)
+                                .font(.custom(cur.psName, size: 14))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(Color.gray.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                     section("Text size — \(Int(controller.style.fontSize)) pt") {
                         Slider(value: Binding(
