@@ -97,7 +97,8 @@ final class ElementRenderer {
         switch e.type {
         case "ellipse": drawable = RoughShapeFactory.ellipse(e.rect, style: style)
         case "diamond": drawable = RoughShapeFactory.diamond(e.rect, style: style)
-        case "line", "arrow": drawable = RoughShapeFactory.line(e.absolutePoints, style: style)
+        case "line", "arrow":
+            drawable = RoughShapeFactory.line(e.absolutePoints, style: style, curved: e.roundness != nil)
         default:
             drawable = e.roundness != nil
                 ? RoughShapeFactory.roundedRectangle(e.rect, style: style)

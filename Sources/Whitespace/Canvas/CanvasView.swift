@@ -43,7 +43,7 @@ final class CanvasView: NSView {
         case freedraw(id: String)
         case move(origins: [String: CGPoint])
         case resize(id: String, handle: Handle, start: CGRect)
-        case endpoint(id: String, isStart: Bool, otherAbs: CGPoint)
+        case vertex(id: String, index: Int)
         case marquee(startScene: CGPoint)
         case pan
         case erase
@@ -56,6 +56,9 @@ final class CanvasView: NSView {
     private var lastPanPoint: CGPoint = .zero
     private var spaceDown = false
     private var marqueeRect: CGRect?
+    /// The line/arrow currently being built by click-to-add-point placement (nil
+    /// when not in multi-point mode). Its last point tracks the cursor as a preview.
+    private var multiPointLineId: String?
     private var lassoPoints: [CGPoint] = []
     private var laserPoints: [CGPoint] = []
     private var laserFadeTimer: Timer?
@@ -92,7 +95,9 @@ final class CanvasView: NSView {
         // the new tool (e.g. the text tool shows Font / Text size).
         controller.$tool
             .sink { [weak self] newTool in
-                guard let self, newTool != .select, !self.scene.selection.isEmpty else { return }
+                guard let self else { return }
+                if self.multiPointLineId != nil { self.finishMultiPointLine() }
+                guard newTool != .select, !self.scene.selection.isEmpty else { return }
                 self.commitText()
                 self.scene.selection.removeAll()
                 self.controller.hasSelection = false
@@ -230,13 +235,31 @@ final class CanvasView: NSView {
     private func drawSelection(in ctx: CGContext) {
         guard isEditing, let bounds = selectionBounds() else { return }
 
-        // Single line/arrow: show draggable endpoint handles instead of a box.
+        // Single line/arrow: show draggable point handles (and midpoint "ghost"
+        // handles that insert a new bend when dragged) instead of a box.
         if scene.selection.count == 1,
            let e = scene.element(scene.selection.first!),
            e.type == "line" || e.type == "arrow" {
-            ctx.setStrokeColor(NSColor(hex: 0x6965db).cgColor)
+            let purple = NSColor(hex: 0x6965db)
+            let pts = e.absolutePoints
             ctx.setLineWidth(1.5)
-            for pt in [e.absolutePoints.first, e.absolutePoints.last].compactMap({ $0 }) {
+            // Midpoint ghosts first (drawn under the solid vertex handles).
+            // Elbow arrows auto-route, so they don't take manual bends.
+            if !e.elbowed && pts.count >= 2 {
+                for i in 0..<(pts.count - 1) {
+                    let mid = CGPoint(x: (pts[i].x + pts[i + 1].x) / 2,
+                                      y: (pts[i].y + pts[i + 1].y) / 2)
+                    let v = camera.sceneToView(mid)
+                    let hr = CGRect(x: v.x - 4, y: v.y - 4, width: 8, height: 8)
+                    ctx.setFillColor(NSColor.white.withAlphaComponent(0.9).cgColor)
+                    ctx.fillEllipse(in: hr)
+                    ctx.setStrokeColor(purple.withAlphaComponent(0.5).cgColor)
+                    ctx.strokeEllipse(in: hr)
+                }
+            }
+            // Real vertices (solid handles).
+            ctx.setStrokeColor(purple.cgColor)
+            for pt in pts {
                 let v = camera.sceneToView(pt)
                 let hr = CGRect(x: v.x - 5, y: v.y - 5, width: 10, height: 10)
                 ctx.setFillColor(NSColor.white.cgColor)
@@ -386,6 +409,12 @@ final class CanvasView: NSView {
         commitCellEdit()
         let p = scenePoint(event)
 
+        // Placing points on a multi-point line: each click commits a vertex.
+        if multiPointLineId != nil, controller.tool == .line || controller.tool == .arrow {
+            handleMultiPointClick(at: p, doubleClick: event.clickCount == 2)
+            return
+        }
+
         // Double-click: open a linked element, edit a text element, or start a
         // new text box on empty canvas.
         if event.clickCount == 2 {
@@ -471,13 +500,10 @@ final class CanvasView: NSView {
             resize(id: id, handle: handle, start: start, to: p)
             rebuildArrowsBound(to: [id])
             syncBoundTexts(to: [id])
-        case .endpoint(let id, let isStart, let otherAbs):
-            let a = isStart ? p : otherAbs
-            let b = isStart ? otherAbs : p
-            scene.update(id: id) { e in
-                e.x = a.x; e.y = a.y
-                e.points = [[0, 0], [b.x - a.x, b.y - a.y]]
-            }
+        case .vertex(let id, let index):
+            guard var pts = scene.element(id)?.absolutePoints, index < pts.count else { break }
+            pts[index] = p
+            setAbsolutePoints(id, pts)
             renderer.invalidate(id)
         case .marquee(let startScene):
             marqueeRect = CGRect(x: min(startScene.x, p.x), y: min(startScene.y, p.y),
@@ -577,16 +603,27 @@ final class CanvasView: NSView {
             updateSelectionState()
             needsDisplay = true
         case .line(let id):
-            finalizeLine(id)
-        case .endpoint(let id, let isStart, _):
-            // Re-bind the dragged end if it now sits on a shape, then re-route.
+            // A press-release that barely moved is a click: begin multi-point
+            // placement instead of finishing a (degenerate) one-segment line.
+            if let e = scene.element(id), let a = e.absolutePoints.first, let b = e.absolutePoints.last,
+               hypot(b.x - a.x, b.y - a.y) < 6 {
+                beginMultiPoint(id)
+            } else {
+                finalizeLine(id)
+            }
+        case .vertex(let id, let index):
+            // Only endpoints re-bind to shapes; interior bends are kept as-is.
             if let arrow = scene.element(id) {
-                let pt = isStart ? arrow.absolutePoints.first : arrow.absolutePoints.last
-                let shape = pt.flatMap { topShape(at: $0, excluding: id, tolerance: 20) }
-                scene.update(id: id) { e in
-                    if isStart { e.startBindingId = shape?.id } else { e.endBindingId = shape?.id }
+                let count = arrow.absolutePoints.count
+                if index == 0 || index == count - 1 {
+                    let isStart = index == 0
+                    let pt = isStart ? arrow.absolutePoints.first : arrow.absolutePoints.last
+                    let shape = pt.flatMap { topShape(at: $0, excluding: id, tolerance: 20) }
+                    scene.update(id: id) { e in
+                        if isStart { e.startBindingId = shape?.id } else { e.endBindingId = shape?.id }
+                    }
+                    rebuildArrow(id)
                 }
-                rebuildArrow(id)
             }
         case .lasso:
             selectInLasso()
@@ -601,6 +638,18 @@ final class CanvasView: NSView {
             break
         }
         drag = .none
+    }
+
+    /// Live preview: while placing a multi-point line, its trailing point tracks
+    /// the cursor so the next segment rubber-bands as you move.
+    override func mouseMoved(with event: NSEvent) {
+        guard isEditing, let id = multiPointLineId, let e = scene.element(id) else { return }
+        var pts = e.absolutePoints
+        guard !pts.isEmpty else { return }
+        pts[pts.count - 1] = scenePoint(event)
+        setAbsolutePoints(id, pts)
+        renderer.invalidate(id)
+        needsDisplay = true
     }
 
     private func selectInLasso() {
@@ -640,16 +689,33 @@ final class CanvasView: NSView {
                 return
             }
         }
-        // Single line/arrow: grab an endpoint handle to adjust it.
+        // Single line/arrow: grab a point handle to adjust it, or a midpoint
+        // ghost to insert a new bend and drag it.
         if scene.selection.count == 1, let id = scene.selection.first,
-           let e = scene.element(id), e.type == "line" || e.type == "arrow",
-           let first = e.absolutePoints.first, let last = e.absolutePoints.last {
-            let firstV = camera.sceneToView(first), lastV = camera.sceneToView(last)
-            if hypot(viewPt.x - firstV.x, viewPt.y - firstV.y) <= 9 {
-                scene.beginEdit(); drag = .endpoint(id: id, isStart: true, otherAbs: last); return
+           let e = scene.element(id), e.type == "line" || e.type == "arrow" {
+            let pts = e.absolutePoints
+            // 1. Existing vertices (elbow arrows expose only their two endpoints).
+            for (i, pt) in pts.enumerated() {
+                if e.elbowed && i != 0 && i != pts.count - 1 { continue }
+                let v = camera.sceneToView(pt)
+                if hypot(viewPt.x - v.x, viewPt.y - v.y) <= 9 {
+                    scene.beginEdit(); drag = .vertex(id: id, index: i); return
+                }
             }
-            if hypot(viewPt.x - lastV.x, viewPt.y - lastV.y) <= 9 {
-                scene.beginEdit(); drag = .endpoint(id: id, isStart: false, otherAbs: first); return
+            // 2. Midpoint ghost → insert a new vertex there and drag it.
+            if !e.elbowed && pts.count >= 2 {
+                for i in 0..<(pts.count - 1) {
+                    let mid = CGPoint(x: (pts[i].x + pts[i + 1].x) / 2,
+                                      y: (pts[i].y + pts[i + 1].y) / 2)
+                    let v = camera.sceneToView(mid)
+                    if hypot(viewPt.x - v.x, viewPt.y - v.y) <= 9 {
+                        scene.beginEdit()
+                        var abs = pts; abs.insert(mid, at: i + 1)
+                        setAbsolutePoints(id, abs)
+                        renderer.invalidate(id)
+                        drag = .vertex(id: id, index: i + 1); return
+                    }
+                }
             }
         }
         // Resize handle hit (single selection, box-shaped elements).
@@ -711,6 +777,9 @@ final class CanvasView: NSView {
         e.points = [[0, 0], [0, 0]]
         e.backgroundColor = "transparent"
         e.elbowed = elbow
+        // Rounded by default so multi-point lines flow as a smooth curve; elbow
+        // arrows stay sharp (right angles).
+        e.roundness = elbow ? nil : Element.Roundness(type: 2)
         if type == "arrow" {
             let s = controller.style
             e.startArrowhead = s.startArrowhead == "none" ? nil : s.startArrowhead
@@ -748,23 +817,102 @@ final class CanvasView: NSView {
         return nil
     }
 
-    /// Recompute a bound arrow's endpoints (snapped to shape edges) + elbow route.
+    /// Set a linear element's points from absolute scene coordinates, keeping the
+    /// origin on the first point (points are stored relative to `x,y`).
+    private func setAbsolutePoints(_ id: String, _ pts: [CGPoint]) {
+        guard let first = pts.first else { return }
+        scene.update(id: id) { e in
+            e.x = first.x; e.y = first.y
+            e.points = pts.map { [Double($0.x - first.x), Double($0.y - first.y)] }
+        }
+    }
+
+    /// Recompute a bound arrow's endpoints (snapped to shape edges), preserving
+    /// any interior bend points. Elbow arrows re-route orthogonally from scratch.
     private func rebuildArrow(_ id: String) {
         guard let arrow = scene.element(id), arrow.type == "arrow" || arrow.type == "line" else { return }
-        let abs = arrow.absolutePoints
-        guard var a = abs.first, var b = abs.last else { return }
+        var pts = arrow.absolutePoints
+        guard pts.count >= 2 else { return }
         let startShape = arrow.startBindingId.flatMap { scene.element($0) }
         let endShape = arrow.endBindingId.flatMap { scene.element($0) }
-        let bCenter = endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? b
-        let aCenter = startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? a
-        if let s = startShape { a = ArrowBinding.edgePoint(of: s, toward: bCenter) }
-        if let e = endShape { b = ArrowBinding.edgePoint(of: e, toward: aCenter) }
-        let absPoints = arrow.elbowed ? ArrowBinding.elbowRoute(a, b) : [a, b]
-        scene.update(id: id) { el in
-            el.x = a.x; el.y = a.y
-            el.points = absPoints.map { [Double($0.x - a.x), Double($0.y - a.y)] }
+
+        if arrow.elbowed {
+            // Auto-routed: rebuild the whole dogleg between the two shape edges.
+            var a = pts.first!, b = pts.last!
+            let bCenter = endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? b
+            let aCenter = startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? a
+            if let s = startShape { a = ArrowBinding.edgePoint(of: s, toward: bCenter) }
+            if let e = endShape { b = ArrowBinding.edgePoint(of: e, toward: aCenter) }
+            setAbsolutePoints(id, ArrowBinding.elbowRoute(a, b))
+        } else {
+            // Move only the bound endpoints; aim each at its interior neighbor so
+            // the arrow stays anchored to the shape edge while keeping its bends.
+            let startTarget = pts.count > 2 ? pts[1]
+                : endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? pts.last!
+            let endTarget = pts.count > 2 ? pts[pts.count - 2]
+                : startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? pts.first!
+            if let s = startShape { pts[0] = ArrowBinding.edgePoint(of: s, toward: startTarget) }
+            if let e = endShape { pts[pts.count - 1] = ArrowBinding.edgePoint(of: e, toward: endTarget) }
+            setAbsolutePoints(id, pts)
         }
         renderer.invalidate(id)
+    }
+
+    // MARK: Multi-point line placement (click-to-add-point)
+
+    /// Enter multi-point mode for a freshly-clicked line/arrow: its last point
+    /// becomes a preview that follows the cursor until the next click.
+    private func beginMultiPoint(_ id: String) {
+        guard let e = scene.element(id), let start = e.absolutePoints.first else {
+            scene.remove(id: id); return
+        }
+        multiPointLineId = id
+        setAbsolutePoints(id, [start, start])  // committed start + preview point
+        window?.acceptsMouseMovedEvents = true
+        scene.selection = []
+        updateSelectionState()
+        renderer.invalidate(id)
+        needsDisplay = true
+    }
+
+    /// A click while placing points: commit the preview as a real vertex (or
+    /// finish if it lands on the last committed point / is a double-click).
+    private func handleMultiPointClick(at p: CGPoint, doubleClick: Bool) {
+        guard let id = multiPointLineId, let e = scene.element(id) else {
+            multiPointLineId = nil; return
+        }
+        let pts = e.absolutePoints
+        let committed = Array(pts.dropLast())   // all but the trailing preview
+        if doubleClick || (committed.last.map { hypot(p.x - $0.x, p.y - $0.y) < 8 } ?? false) {
+            finishMultiPointLine(); return
+        }
+        setAbsolutePoints(id, committed + [p, p])  // fix this vertex, start a new preview
+        renderer.invalidate(id)
+        needsDisplay = true
+    }
+
+    /// Commit the multi-point line: drop the trailing preview point, bind the
+    /// endpoints to any shapes under them, and select it.
+    private func finishMultiPointLine() {
+        guard let id = multiPointLineId else { return }
+        multiPointLineId = nil
+        window?.acceptsMouseMovedEvents = false
+        guard let e = scene.element(id) else { return }
+        var pts = e.absolutePoints
+        if pts.count >= 2 { pts.removeLast() }   // drop preview
+        guard pts.count >= 2 else { scene.remove(id: id); needsDisplay = true; return }
+        setAbsolutePoints(id, pts)
+        let startShape = topShape(at: pts.first!, excluding: id, tolerance: 20)
+        let endShape = topShape(at: pts.last!, excluding: id, tolerance: 20)
+        scene.update(id: id) { el in
+            el.startBindingId = startShape?.id
+            el.endBindingId = endShape?.id
+        }
+        rebuildArrow(id)
+        scene.selection = [id]
+        updateSelectionState()
+        renderer.invalidate(id)
+        needsDisplay = true
     }
 
     /// Re-route any arrow bound to a shape that just moved (but not arrows that
@@ -1082,6 +1230,10 @@ final class CanvasView: NSView {
                     e.startArrowhead = s.startArrowhead == "none" ? nil : s.startArrowhead
                     e.endArrowhead = s.endArrowhead == "none" ? nil : s.endArrowhead
                 }
+                if e.type == "line" || e.type == "arrow" {
+                    // Edges toggle → smooth curve vs. sharp corners (elbow stays sharp).
+                    e.roundness = (s.rounded && !e.elbowed) ? Element.Roundness(type: 2) : nil
+                }
                 if e.type == "text" {
                     e.fontSize = s.fontSize
                     e.fontFamily = s.fontFamily
@@ -1216,6 +1368,10 @@ final class CanvasView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard isEditing else { return super.keyDown(with: event) }
+        // While placing a multi-point line, Return / Enter / Esc finish it.
+        if multiPointLineId != nil, [36, 76, 53].contains(event.keyCode) {
+            finishMultiPointLine(); return
+        }
         if event.keyCode == 49 { // space → Quick Look a selected file, else arm pan
             if selectedFileURL() != nil { toggleQuickLook(); return }
             spaceDown = true; return

@@ -97,10 +97,11 @@ enum RoughShapeFactory {
                              strokeWidth: o.strokeWidth, fillWeight: o.fillWeight)
     }
 
-    static func line(_ pts: [CGPoint], style: RoughStyle) -> RoughDrawable {
+    static func line(_ pts: [CGPoint], style: RoughStyle, curved: Bool = false) -> RoughDrawable {
         let o = options(style)
         let rough = Rough(o)
-        let outline = Rough.path(from: rough.linearPath(pts, close: false))
+        let ops = curved ? rough.curvedPath(pts) : rough.linearPath(pts, close: false)
+        let outline = Rough.path(from: ops)
         return RoughDrawable(outline: outline, fill: nil, fillIsSolid: false,
                              strokeWidth: o.strokeWidth, fillWeight: o.fillWeight)
     }

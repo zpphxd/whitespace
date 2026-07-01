@@ -103,6 +103,36 @@ final class Rough {
         return ops
     }
 
+    /// rough.js `curve()`: a smooth, double-stroked spline that passes through
+    /// every given point (used for rounded lines/arrows). Endpoints are padded
+    /// so the spline actually reaches the first and last points.
+    func curvedPath(_ points: [CGPoint]) -> [RoughOp] {
+        guard points.count > 2 else {
+            guard points.count == 2 else { return [] }
+            return doubleLine(points[0].x, points[0].y, points[1].x, points[1].y)
+        }
+        var ops = curveWithOffset(points, offset: 1 * (1 + o.roughness * 0.2))
+        if !o.disableMultiStroke {
+            ops += curveWithOffset(points, offset: 1.5 * (1 + o.roughness * 0.22))
+        }
+        return ops
+    }
+
+    /// rough.js `_curveWithOffset`: duplicate the first/last points and jitter
+    /// each one, then run the Catmull-Rom `curve`.
+    private func curveWithOffset(_ points: [CGPoint], offset: Double) -> [RoughOp] {
+        guard let first = points.first else { return [] }
+        func jitter(_ p: CGPoint) -> CGPoint {
+            CGPoint(x: p.x + offsetOpt(offset), y: p.y + offsetOpt(offset))
+        }
+        var ps: [CGPoint] = [jitter(first), jitter(first)]
+        for i in 1..<points.count {
+            ps.append(jitter(points[i]))
+            if i == points.count - 1 { ps.append(jitter(points[i])) }
+        }
+        return curve(ps)
+    }
+
     // MARK: Ellipse (rough.js _computeEllipsePoints + _curve)
 
     func ellipse(cx: Double, cy: Double, width: Double, height: Double) -> [RoughOp] {
