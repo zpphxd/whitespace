@@ -1213,19 +1213,23 @@ final class CanvasView: NSView {
     @objc private func ctxOpenURL() { if let u = contextURL { openLink(u) } }
     @objc private func ctxMakeQR() {
         guard let u = contextURL, let id = scene.selection.first, let e = scene.element(id) else { return }
-        makeQRCode(for: u, near: e)
+        makeQRCode(for: u, replacing: e)
     }
     @objc private func ctxDelete() { deleteSelectionAction() }
 
     /// Generate a QR code for `url` and drop it as an image element beside `e`.
-    private func makeQRCode(for url: String, near e: Element) {
+    /// Replace a link element with a QR code encoding its URL (the URL lives in
+    /// the code, so we don't keep the original link node too).
+    private func makeQRCode(for url: String, replacing e: Element) {
         guard let path = QRCode.generatePNG(for: url) else { return }
         let r = e.boundingRect
         let size = 180.0
         scene.beginEdit()
-        var qr = makeElement(type: "image", x: r.maxX + 20, y: r.midY - size / 2, width: size, height: size)
+        var qr = makeElement(type: "image", x: r.midX - size / 2, y: r.midY - size / 2, width: size, height: size)
         qr.link = path
         qr.backgroundColor = "transparent"
+        renderer.invalidate(e.id)
+        scene.remove(id: e.id)
         scene.add(qr)
         scene.selection = [qr.id]
         controller.tool = .select
@@ -1618,6 +1622,11 @@ final class CanvasView: NSView {
                     let width = (value as NSString).size(withAttributes: [.font: Fonts.font(family: family, size: size)]).width
                     e.width = Double(width) + 8
                     e.height = Double(size) * 1.25
+                }
+                // A bare URL auto-links so it's clickable / QR-able.
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.contains("://"), !trimmed.contains(" "), !trimmed.contains("\n") {
+                    e.link = trimmed
                 }
             }
             renderer.invalidate(id)
