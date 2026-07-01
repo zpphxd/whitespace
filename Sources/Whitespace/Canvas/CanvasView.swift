@@ -1165,19 +1165,38 @@ final class CanvasView: NSView {
     }
 
     private var contextPath: String?
+    private var contextURL: String?
+
+    /// A URL to encode as a QR code for this element: its `link` (if it's a URL /
+    /// app link), or the text of a text element that is itself a URL.
+    private func qrURL(for e: Element) -> String? {
+        if let l = e.link, l.contains("://") { return l }
+        if e.type == "text", let t = e.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           t.contains("://"), !t.contains(" ") { return t }
+        return nil
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard isEditing else { return nil }
         let p = camera.viewToScene(viewPoint(event))
-        guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
-              hit.type == "file" || hit.type == "image",
-              let link = hit.link, !link.contains("://") else { return nil }
+        guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) else { return nil }
         scene.selection = [hit.id]; updateSelectionState(); needsDisplay = true
-        contextPath = (link as NSString).expandingTildeInPath
+
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
-        menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
-        menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
+        // Local file / image node: Finder actions.
+        if (hit.type == "file" || hit.type == "image"), let link = hit.link, !link.contains("://") {
+            contextPath = (link as NSString).expandingTildeInPath
+            menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
+            menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
+            menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
+        }
+        // URL / app-link node (or a URL text): open + one-click QR.
+        if let url = qrURL(for: hit) {
+            contextURL = url
+            menu.addItem(withTitle: "Open Link", action: #selector(ctxOpenURL), keyEquivalent: "")
+            menu.addItem(withTitle: "Turn into QR Code", action: #selector(ctxMakeQR), keyEquivalent: "")
+        }
+        guard !menu.items.isEmpty else { return nil }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Delete", action: #selector(ctxDelete), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
@@ -1191,7 +1210,28 @@ final class CanvasView: NSView {
     @objc private func ctxReveal() {
         if let p = contextPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
     }
+    @objc private func ctxOpenURL() { if let u = contextURL { openLink(u) } }
+    @objc private func ctxMakeQR() {
+        guard let u = contextURL, let id = scene.selection.first, let e = scene.element(id) else { return }
+        makeQRCode(for: u, near: e)
+    }
     @objc private func ctxDelete() { deleteSelectionAction() }
+
+    /// Generate a QR code for `url` and drop it as an image element beside `e`.
+    private func makeQRCode(for url: String, near e: Element) {
+        guard let path = QRCode.generatePNG(for: url) else { return }
+        let r = e.boundingRect
+        let size = 180.0
+        scene.beginEdit()
+        var qr = makeElement(type: "image", x: r.maxX + 20, y: r.midY - size / 2, width: size, height: size)
+        qr.link = path
+        qr.backgroundColor = "transparent"
+        scene.add(qr)
+        scene.selection = [qr.id]
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
 
     private func makeElement(type: String, x: Double, y: Double, width: Double, height: Double) -> Element {
         let s = controller.style

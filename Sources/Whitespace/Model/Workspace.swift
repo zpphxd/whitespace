@@ -27,6 +27,13 @@ enum Workspace {
         return dir.appendingPathComponent("workspace.json")
     }
 
+    /// Directory for generated/imported images (QR codes, drops), under the app support folder.
+    static var imagesDir: URL {
+        let dir = url.deletingLastPathComponent().appendingPathComponent("images", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     /// Load boards, migrating the legacy single document if no workspace exists.
     static func load() -> WorkspaceData {
         if let data = try? Data(contentsOf: url),
