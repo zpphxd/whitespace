@@ -13,6 +13,8 @@ final class ElementRenderer {
     }
     private var cache: [String: CacheEntry] = [:]
     private var imageCache: [String: NSImage] = [:]
+    /// Cached perfect-freehand outline path, keyed by element id (+ version).
+    private var freehandCache: [String: (version: Int, path: CGPath)] = [:]
 
     /// Marching-ants phase for live data pipes (advanced by the canvas timer).
     var pipePhase: CGFloat = 0
@@ -22,8 +24,8 @@ final class ElementRenderer {
     /// they connect two cells and should render as a live pipe).
     private var cellIds: Set<String> = []
 
-    func invalidate(_ id: String) { cache.removeValue(forKey: id) }
-    func invalidateAll() { cache.removeAll() }
+    func invalidate(_ id: String) { cache.removeValue(forKey: id); freehandCache.removeValue(forKey: id) }
+    func invalidateAll() { cache.removeAll(); freehandCache.removeAll() }
 
     func draw(scene: Scene, camera: Camera, in ctx: CGContext) {
         ctx.saveGState()
@@ -108,32 +110,26 @@ final class ElementRenderer {
         return drawable
     }
 
-    // MARK: Freehand (smooth, variable cap)
+    // MARK: Freehand — perfect-freehand variable-width outline (thick=slow, thin=fast)
 
     private func drawFreehand(_ e: Element, color: NSColor, opacity: CGFloat, in ctx: CGContext) {
         let pts = e.absolutePoints
-        guard pts.count > 1 else { return }
-        let path = CGMutablePath()
-        path.move(to: pts[0])
-        if pts.count == 2 {
-            path.addLine(to: pts[1])
+        guard !pts.isEmpty else { return }
+
+        let path: CGPath
+        if let hit = freehandCache[e.id], hit.version == e.version {
+            path = hit.path
         } else {
-            // Quadratic smoothing through midpoints for a fluid pen line.
-            for i in 1..<(pts.count - 1) {
-                let mid = CGPoint(x: (pts[i].x + pts[i + 1].x) / 2,
-                                  y: (pts[i].y + pts[i + 1].y) / 2)
-                path.addQuadCurve(to: mid, control: pts[i])
-            }
-            path.addLine(to: pts[pts.count - 1])
+            let outline = PerfectFreehand.stroke(pts, strokeWidth: e.strokeWidth)
+            path = PerfectFreehand.path(from: outline)
+            freehandCache[e.id] = (e.version, path)
         }
+
         ctx.saveGState()
         ctx.setAlpha(opacity)
         ctx.addPath(path)
-        ctx.setStrokeColor(color.cgColor)
-        ctx.setLineWidth(max(e.strokeWidth, 1) * 1.5)
-        ctx.setLineCap(.round)
-        ctx.setLineJoin(.round)
-        ctx.strokePath()
+        ctx.setFillColor(color.cgColor)   // filled variable-width polygon, not a stroked centerline
+        ctx.fillPath()
         ctx.restoreGState()
     }
 
