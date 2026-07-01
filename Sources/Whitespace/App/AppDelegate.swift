@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var boards: [BoardDoc] = []
     private var currentBoard = 0
     private var shortcuts: ShortcutsWindow!
+    private var cheatSheet = CheatSheetWindow()
     private var searchWindow: SearchWindow!
 
     private var autosaveItem: DispatchWorkItem?
@@ -132,7 +133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerHotKeys()
         shortcuts = ShortcutsWindow()
         shortcuts.onChange = { [weak self] in self?.registerHotKeys() }
-        controller.openShortcutsAction = { [weak self] in self?.shortcuts.show() }
+        controller.openShortcutsAction = { [weak self] in self?.cheatSheet.toggle() }
+        controller.configureHotkeysAction = { [weak self] in self?.shortcuts.show() }
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),

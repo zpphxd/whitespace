@@ -142,6 +142,7 @@ struct InspectorView: View {
             }
             Divider()
             Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
+            Button("Configure Hotkeys…") { controller.configureHotkeysAction?() }
         } label: {
             Image(systemName: "gearshape").frame(width: 22, height: 22)
         }
