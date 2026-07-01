@@ -30,6 +30,10 @@ extension View {
     /// Deliberately minimal — no opaque tint to smother the effect.
     @ViewBuilder
     func liquidGlassPanel(cornerRadius: CGFloat = 26) -> some View {
+        // `glassEffect` only exists in the macOS 26 SDK (Xcode 26+). Gate it at
+        // *compile time* so older toolchains (e.g. GitHub-hosted CI on Xcode 16)
+        // build the fallback instead of failing on the missing symbol.
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             // Non-interactive: `.interactive()` reacts to the pointer with a
             // scale/bounce that reads as a jumpy animation on a static palette.
@@ -40,17 +44,26 @@ extension View {
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
         } else {
-            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            background { VisualEffectBackground(material: .hudWindow, cornerRadius: cornerRadius) }
-                .clipShape(shape)
-                .overlay {
-                    shape.strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.12)],
-                            startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.3), radius: 22, x: 0, y: 12)
+            liquidGlassFallback(cornerRadius: cornerRadius)
         }
+        #else
+        liquidGlassFallback(cornerRadius: cornerRadius)
+        #endif
+    }
+
+    /// Translucent blurred panel for systems (or toolchains) without Liquid Glass.
+    @ViewBuilder
+    func liquidGlassFallback(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        background { VisualEffectBackground(material: .hudWindow, cornerRadius: cornerRadius) }
+            .clipShape(shape)
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.5), .white.opacity(0.12)],
+                        startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 22, x: 0, y: 12)
     }
 }
