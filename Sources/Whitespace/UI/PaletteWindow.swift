@@ -20,7 +20,7 @@ final class PaletteWindow {
 
         panel = KeyablePanel(contentViewController: host)
         panel.styleMask = [.borderless, .nonactivatingPanel]
-        panel.isMovableByWindowBackground = false
+        panel.isMovableByWindowBackground = false   // static panel — drags stay with the controls (e.g. sliders)
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false

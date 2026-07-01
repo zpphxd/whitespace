@@ -19,10 +19,6 @@ struct ToolPaletteView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WindowDragHandle()          // grab-bar: drag to move the palette
-                .frame(height: 10)
-                .frame(maxWidth: .infinity)
-                .help("Drag to move the palette")
             HStack(spacing: 6) {
                 tabBar
                 gearMenu
