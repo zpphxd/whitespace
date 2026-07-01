@@ -104,13 +104,6 @@ struct ToolPaletteView: View {
 
     private var gearMenu: some View {
         Menu {
-            Picker("When idle", selection: Binding(
-                get: { Double(Settings.idleBoardOpacity) },
-                set: { controller.setIdleOpacity?(CGFloat($0)) })) {
-                Text("Transparent").tag(0.0)
-                Text("Faint").tag(0.4)
-                Text("White board").tag(0.92)
-            }
             Picker("When editing", selection: Binding(
                 get: { Double(Settings.editBoardOpacity) },
                 set: { controller.setEditOpacity?(CGFloat($0)) })) {

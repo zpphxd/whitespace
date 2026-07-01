@@ -26,7 +26,6 @@ final class CanvasController: ObservableObject {
     var clearBoardAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).
-    var setIdleOpacity: ((CGFloat) -> Void)?
     var setEditOpacity: ((CGFloat) -> Void)?
     var setKeepIcons: ((Bool) -> Void)?
     var setLinkColorAction: ((String) -> Void)?

@@ -60,9 +60,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
-        controller.setIdleOpacity = { [weak self] v in
-            Settings.idleBoardOpacity = v; self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
-        }
         controller.setEditOpacity = { [weak self] v in
             Settings.editBoardOpacity = v; self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
         }
@@ -103,9 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar = MenuBarController(
             onToggleEdit: { [weak self] in self?.toggleEdit() },
             onQuit: { [weak self] in self?.saveNow(); NSApp.terminate(nil) },
-            onSetIdleOpacity: { [weak self] v in
-                self?.canvas.idleBoardOpacity = v; self?.canvas.needsDisplay = true
-            },
             onSetEditOpacity: { [weak self] v in
                 self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
             },

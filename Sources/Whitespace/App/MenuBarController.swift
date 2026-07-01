@@ -8,7 +8,6 @@ final class MenuBarController {
     private let editItem: NSMenuItem
     private let onToggleEdit: () -> Void
     private var quitHandler: (() -> Void)?
-    private var setIdleOpacity: ((CGFloat) -> Void)?
     private var setEditOpacity: ((CGFloat) -> Void)?
     private var toggleKeepIcons: ((Bool) -> Void)?
     private var togglePalette: (() -> Void)?
@@ -21,7 +20,6 @@ final class MenuBarController {
 
     init(onToggleEdit: @escaping () -> Void,
          onQuit: @escaping () -> Void,
-         onSetIdleOpacity: @escaping (CGFloat) -> Void,
          onSetEditOpacity: @escaping (CGFloat) -> Void,
          onToggleKeepIcons: @escaping (Bool) -> Void,
          onTogglePalette: @escaping () -> Void,
@@ -32,7 +30,6 @@ final class MenuBarController {
          onOpenFile: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
-        self.setIdleOpacity = onSetIdleOpacity
         self.setEditOpacity = onSetEditOpacity
         self.toggleKeepIcons = onToggleKeepIcons
         self.togglePalette = onTogglePalette
@@ -102,17 +99,6 @@ final class MenuBarController {
         let board = NSMenuItem(title: "Board Appearance", action: nil, keyEquivalent: "")
         let sub = NSMenu()
 
-        let idleHeader = NSMenuItem(title: "When idle:", action: nil, keyEquivalent: "")
-        idleHeader.isEnabled = false
-        sub.addItem(idleHeader)
-        for (title, value) in [("Transparent", 0.0), ("Faint", 0.4), ("White board", 0.92)] {
-            let item = NSMenuItem(title: "  \(title)", action: #selector(idleOpacity(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = value
-            item.state = Settings.idleBoardOpacity == CGFloat(value) ? .on : .off
-            sub.addItem(item)
-        }
-        sub.addItem(.separator())
         let editHeader = NSMenuItem(title: "When editing:", action: nil, keyEquivalent: "")
         editHeader.isEnabled = false
         sub.addItem(editHeader)
@@ -132,13 +118,6 @@ final class MenuBarController {
             guard item.action == selector, let v = item.representedObject as? Double else { return }
             item.state = CGFloat(v) == current ? .on : .off
         }
-    }
-
-    @objc private func idleOpacity(_ sender: NSMenuItem) {
-        guard let v = sender.representedObject as? Double else { return }
-        Settings.idleBoardOpacity = CGFloat(v)
-        setIdleOpacity?(CGFloat(v))
-        refreshChecks(in: sender.menu, selector: #selector(idleOpacity(_:)), current: CGFloat(v))
     }
 
     @objc private func editOpacity(_ sender: NSMenuItem) {

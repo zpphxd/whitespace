@@ -29,11 +29,10 @@ final class CanvasView: NSView {
     /// Called when a `.excalidraw` file is dropped/opened — load it as a board.
     var onOpenFile: ((URL) -> Void)?
 
-    /// Whiteboard backdrop opacity per mode (1 = opaque white, 0 = wallpaper
-    /// shows through). Defaults: idle is transparent so the desktop looks
-    /// normal with drawings floating on it; edit mode shows a light board.
-    /// Both are user-configurable via `Settings`.
-    var idleBoardOpacity: CGFloat = Settings.idleBoardOpacity
+    /// Whiteboard backdrop opacity. Idle is *always* transparent — drawings float
+    /// on the wallpaper — so leaving edit mode is a clean on/off flip. Only the
+    /// edit-mode backdrop is configurable (light wash / solid / transparent).
+    var idleBoardOpacity: CGFloat = 0
     var editBoardOpacity: CGFloat = Settings.editBoardOpacity
 
     // Interaction state
