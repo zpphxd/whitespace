@@ -120,7 +120,8 @@ final class ElementRenderer {
         if let hit = freehandCache[e.id], hit.version == e.version {
             path = hit.path
         } else {
-            let outline = PerfectFreehand.stroke(pts, strokeWidth: e.strokeWidth)
+            let outline = PerfectFreehand.stroke(pts, strokeWidth: e.strokeWidth,
+                                                 pressure: e.simulatePressure ?? true)
             path = PerfectFreehand.path(from: outline)
             freehandCache[e.id] = (e.version, path)
         }

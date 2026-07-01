@@ -38,6 +38,9 @@ struct Element: Codable, Identifiable, Equatable {
     var points: [[Double]]?
     var pressures: [Double]?
     var lastCommittedPoint: [Double]?
+    /// Freedraw: whether width varies with drawing speed. nil/true = variable
+    /// (perfect-freehand), false = uniform thickness.
+    var simulatePressure: Bool?
     var startArrowhead: String?
     var endArrowhead: String?
     var elbowed: Bool = false
@@ -104,6 +107,7 @@ struct Element: Codable, Identifiable, Equatable {
         points: [[Double]]? = nil,
         pressures: [Double]? = nil,
         lastCommittedPoint: [Double]? = nil,
+        simulatePressure: Bool? = nil,
         startArrowhead: String? = nil,
         endArrowhead: String? = nil,
         elbowed: Bool = false,
@@ -132,6 +136,7 @@ struct Element: Codable, Identifiable, Equatable {
         self.roundness = roundness; self.boundElements = boundElements; self.updated = updated
         self.link = link; self.locked = locked; self.index = index
         self.points = points; self.pressures = pressures; self.lastCommittedPoint = lastCommittedPoint
+        self.simulatePressure = simulatePressure
         self.startArrowhead = startArrowhead; self.endArrowhead = endArrowhead
         self.elbowed = elbowed
         self.startBindingId = startBindingId; self.endBindingId = endBindingId
@@ -174,6 +179,7 @@ struct Element: Codable, Identifiable, Equatable {
         points = try? c.decodeIfPresent([[Double]].self, forKey: .points)
         pressures = try? c.decodeIfPresent([Double].self, forKey: .pressures)
         lastCommittedPoint = try? c.decodeIfPresent([Double].self, forKey: .lastCommittedPoint)
+        simulatePressure = try? c.decodeIfPresent(Bool.self, forKey: .simulatePressure)
         startArrowhead = try? c.decodeIfPresent(String.self, forKey: .startArrowhead)
         endArrowhead = try? c.decodeIfPresent(String.self, forKey: .endArrowhead)
         elbowed = d(.elbowed, false)

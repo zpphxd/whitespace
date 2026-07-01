@@ -73,4 +73,5 @@ struct CurrentStyle {
     var elbowArrow: Bool = false        // arrow type: elbow vs straight
     var startArrowhead: String = "none"
     var endArrowhead: String = "arrow"
+    var pressureSensitive: Bool = true  // pen: width varies with speed vs. uniform
 }

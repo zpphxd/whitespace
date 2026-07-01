@@ -211,6 +211,7 @@ struct ToolPaletteView: View {
     private var showsFill: Bool { ["rectangle", "diamond", "ellipse", "line"].contains(contextType) }
     private var isArrow: Bool { contextType == "arrow" }
     private var isText: Bool { contextType == "text" }
+    private var isPen: Bool { contextType == "freedraw" }
     /// Text and file/link/folder nodes both carry an editable label font.
     private var isTextual: Bool { contextType == "text" || contextType == "file" }
     private var isStrokable: Bool { contextType != "text" && contextType != "file" }
@@ -265,6 +266,14 @@ struct ToolPaletteView: View {
                 }
             }
             Group {
+                if isPen {
+                    section("Pressure") {
+                        TextSegment(options: [(value: true, label: "Variable"), (value: false, label: "Uniform")],
+                                    selection: Binding<Bool>(
+                                        get: { controller.style.pressureSensitive },
+                                        set: { controller.style.pressureSensitive = $0; apply() }))
+                    }
+                }
                 if contextType == "rectangle" {
                     section("Edges") {
                         TextSegment(options: [(value: false, label: "Sharp"), (value: true, label: "Round")],

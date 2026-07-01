@@ -946,6 +946,7 @@ final class CanvasView: NSView {
         var e = makeElement(type: "freedraw", x: p.x, y: p.y, width: 0, height: 0)
         e.points = [[0, 0]]
         e.backgroundColor = "transparent"
+        e.simulatePressure = controller.style.pressureSensitive
         scene.add(e)
         drag = .freedraw(id: e.id)
     }
@@ -1223,6 +1224,7 @@ final class CanvasView: NSView {
             controller.style.elbowArrow = e.elbowed
             controller.style.startArrowhead = e.startArrowhead ?? "none"
             controller.style.endArrowhead = e.endArrowhead ?? "none"
+            if e.type == "freedraw" { controller.style.pressureSensitive = e.simulatePressure ?? true }
         }
     }
 
@@ -1250,6 +1252,9 @@ final class CanvasView: NSView {
                 if e.type == "line" || e.type == "arrow" {
                     // Edges toggle → smooth curve vs. sharp corners (elbow stays sharp).
                     e.roundness = (s.rounded && !e.elbowed) ? Element.Roundness(type: 2) : nil
+                }
+                if e.type == "freedraw" {
+                    e.simulatePressure = s.pressureSensitive
                 }
                 if e.type == "text" {
                     e.fontSize = s.fontSize

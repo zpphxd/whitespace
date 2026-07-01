@@ -11,12 +11,13 @@ import Foundation
 /// to fill (not a centerline to stroke).
 enum PerfectFreehand {
 
-    // Excalidraw's freedraw options.
-    static func stroke(_ input: [CGPoint], strokeWidth: Double) -> [CGPoint] {
+    /// Excalidraw's freedraw options. `pressure: false` → a uniform-width stroke
+    /// (thinning 0), for a plain marker with no speed variation.
+    static func stroke(_ input: [CGPoint], strokeWidth: Double, pressure: Bool = true) -> [CGPoint] {
         let size = max(strokeWidth * 4.25, 1)
         let pts = strokePoints(input, streamline: 0.5, size: size, isComplete: true)
-        return outlinePoints(pts, size: size, thinning: 0.6, smoothing: 0.5,
-                             simulatePressure: true, isComplete: true)
+        return outlinePoints(pts, size: size, thinning: pressure ? 0.6 : 0, smoothing: 0.5,
+                             simulatePressure: pressure, isComplete: true)
     }
 
     private static let rateOfPressureChange = 0.275
