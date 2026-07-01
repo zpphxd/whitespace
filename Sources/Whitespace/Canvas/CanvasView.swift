@@ -74,6 +74,7 @@ final class CanvasView: NSView {
     private var graphOrder: [String] = []
     private var graphOutputs: [String: String] = [:]
     private var clipboard: [Element] = []
+    private let chartWheel = ChartWheelWindow()
 
     init(frame: NSRect, scene: Scene, controller: CanvasController) {
         self.scene = scene
@@ -1332,22 +1333,60 @@ final class CanvasView: NSView {
             scene.selection = Set(newIds)
         } else if let str = NSPasteboard.general.string(forType: .string), !str.isEmpty {
             let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
-            let size = controller.style.fontSize
-            let font = Fonts.handDrawn(size: CGFloat(size))
-            let lines = str.components(separatedBy: "\n")
-            let width = lines.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 80
-            var e = makeElement(type: "text", x: center.x, y: center.y, width: 0, height: 0)
-            e.text = str
-            e.fontSize = size
-            e.fontFamily = 5
-            e.strokeColor = controller.style.strokeColor
-            e.width = Double(width) + 8
-            e.height = size * 1.25 * Double(lines.count)
-            scene.add(e)
-            scene.selection = [e.id]
+            // Tabular data → open the Liquid Glass wheel to pick a chart type.
+            if let sheet = ChartMaker.parse(str) {
+                chartWheel.present(options: chartWheelOptions()) { [weak self] choice in
+                    guard let self, let choice else { return }   // cancelled
+                    self.scene.beginEdit()
+                    if choice == "text" {
+                        self.insertTextBox(str, center: center)
+                    } else {
+                        self.insertChart(sheet, type: choice, center: center)
+                    }
+                }
+                return
+            }
+            insertTextBox(str, center: center)
         }
         updateSelectionState()
     }
+
+    private func insertTextBox(_ str: String, center: CGPoint) {
+        let size = controller.style.fontSize
+        let font = Fonts.handDrawn(size: CGFloat(size))
+        let lines = str.components(separatedBy: "\n")
+        let width = lines.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 80
+        var e = makeElement(type: "text", x: center.x, y: center.y, width: 0, height: 0)
+        e.text = str
+        e.fontSize = size
+        e.fontFamily = 5
+        e.strokeColor = controller.style.strokeColor
+        e.width = Double(width) + 8
+        e.height = size * 1.25 * Double(lines.count)
+        scene.add(e)
+        scene.selection = [e.id]
+        updateSelectionState()
+    }
+
+    /// Chart types offered in the paste wheel, plus a "paste as text" escape.
+    private func chartWheelOptions() -> [ChartWheelOption] {
+        let titles = ["bar": "Bar", "line": "Line", "hbar": "Horizontal",
+                      "step": "Step", "scatter": "Scatter", "lollipop": "Lollipop"]
+        return ChartMaker.types.map { ChartWheelOption(type: $0, title: titles[$0] ?? $0.capitalized) }
+            + [ChartWheelOption(type: "text", title: "Text")]
+    }
+
+    /// Add a generated chart's elements, grouped and selected.
+    private func insertChart(_ sheet: ChartMaker.Spreadsheet, type: String, center: CGPoint) {
+        let els = ChartMaker.elements(sheet, type: type, center: center)
+        var ids = Set<String>()
+        for e in els { scene.add(e); ids.insert(e.id) }
+        scene.selection = ids
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
 
     // MARK: Keyboard
 
