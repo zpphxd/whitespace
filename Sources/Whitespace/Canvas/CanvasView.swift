@@ -632,8 +632,10 @@ final class CanvasView: NSView {
         case .laser:
             startLaserFade()  // trail retracts from tail → head, then clears
             needsDisplay = true
-        case .freedraw:
-            break
+        case .freedraw(let id):
+            reassignFrameMembership([id])
+            controller.tool = .select   // revert to the pointer after placing
+            updateSelectionState()
         default:
             break
         }
@@ -804,7 +806,8 @@ final class CanvasView: NSView {
         }
         rebuildArrow(id)
         scene.selection = [id]
-        updateSelectionState()  // stay on the current tool for repeated drawing
+        controller.tool = .select   // revert to the pointer after placing
+        updateSelectionState()
     }
 
     private let connectableTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image", "cell"]
@@ -910,6 +913,7 @@ final class CanvasView: NSView {
         }
         rebuildArrow(id)
         scene.selection = [id]
+        controller.tool = .select   // revert to the pointer after placing
         updateSelectionState()
         renderer.invalidate(id)
         needsDisplay = true
@@ -953,7 +957,8 @@ final class CanvasView: NSView {
             reassignFrameMembership([id])   // drawn inside a frame → becomes a member
         }
         scene.selection = [id]
-        updateSelectionState()  // stay on the current tool for repeated drawing
+        controller.tool = .select   // revert to the pointer after placing
+        updateSelectionState()
     }
 
     private func resize(id: String, handle: Handle, start: CGRect, to p: CGPoint) {
