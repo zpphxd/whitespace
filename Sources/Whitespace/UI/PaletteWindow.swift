@@ -26,10 +26,16 @@ class ChromePanelWindow {
 
     fileprivate init(dock: PanelDock, root: some View) {
         self.dock = dock
-        let host = NSHostingController(rootView: root)
+        // Pin controls to the inactive appearance so the panel keeps its frosted
+        // look and never brightens (blue sliders / white bg) when it becomes key.
+        let host = NSHostingController(rootView: root.environment(\.controlActiveState, .inactive))
 
         panel = KeyablePanel(contentViewController: host)
         panel.styleMask = [.borderless, .nonactivatingPanel]
+        // Become key only when a text field actually needs it (tab rename) — not
+        // on every click — so the glass stays frosted during normal use instead
+        // of flipping to the bright "active" look.
+        panel.becomesKeyOnlyIfNeeded = true
         panel.isMovableByWindowBackground = false   // static panel — drags stay with the controls (e.g. sliders)
         panel.isFloatingPanel = true
         panel.level = .floating

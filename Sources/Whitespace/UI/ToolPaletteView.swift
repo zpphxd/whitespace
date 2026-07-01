@@ -19,7 +19,7 @@ struct InspectorView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 tabBar
                 gearMenu
@@ -27,10 +27,10 @@ struct InspectorView: View {
             Divider()
             inspector
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .frame(width: 376)
-        .liquidGlassPanel(cornerRadius: 24)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 14)
+        .frame(width: 244)
+        .liquidGlassPanel(cornerRadius: 20)
     }
 
     private var tabBar: some View {

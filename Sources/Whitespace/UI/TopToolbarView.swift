@@ -9,30 +9,30 @@ struct TopToolbarView: View {
 
     var body: some View {
         tools
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .liquidGlassPanel(cornerRadius: 18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .liquidGlassPanel(cornerRadius: 16)
     }
 
     private var tools: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             ForEach(Tool.primary, id: \.self) { tool in
                 Button {
                     controller.tool = tool
                 } label: {
                     Image(systemName: tool.symbol)
-                        .frame(width: 24, height: 26)
+                        .frame(width: 30, height: 32)
                         .background(controller.tool == tool ? Color(hex: 0x6965db) : .clear)
                         .foregroundStyle(controller.tool == tool ? .white : .primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .help("\(tool.rawValue.capitalized) (\(String(tool.key)))")
             }
-            Divider().frame(height: 18).padding(.horizontal, 1)
+            Divider().frame(height: 22).padding(.horizontal, 2)
             Button { controller.insertImageAction?() } label: {
-                Image(systemName: "photo").frame(width: 25, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                Image(systemName: "photo").frame(width: 30, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .help("Insert image")
@@ -40,7 +40,7 @@ struct TopToolbarView: View {
                 Button("Link File or Folder…") { controller.linkFileAction?() }
                 Button("Link URL…") { controller.linkURLAction?() }
             } label: {
-                Image(systemName: "paperclip").frame(width: 25, height: 26)
+                Image(systemName: "paperclip").frame(width: 30, height: 32)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -60,7 +60,7 @@ struct TopToolbarView: View {
                 } label: { Label("Code Cell", systemImage: "chevron.left.forwardslash.chevron.right") }
                 Button { controller.runGraphAction?() } label: { Label("Run Graph (⌘⇧↵)", systemImage: "play.circle") }
             } label: {
-                Image(systemName: "ellipsis.circle").frame(width: 25, height: 26)
+                Image(systemName: "ellipsis.circle").frame(width: 30, height: 32)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
