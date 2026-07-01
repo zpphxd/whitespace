@@ -11,6 +11,11 @@ struct ToolPaletteView: View {
 
     private let strokeSwatches = ["#1e1e1e", "#e03131", "#2f9e44", "#1971c2", "#f08c00"]
     private let bgSwatches = ["transparent", "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"]
+    private let shortcutHints: [(key: String, label: String)] = [
+        ("V", "Select"), ("R", "Rect"), ("O", "Oval"), ("A", "Arrow"),
+        ("T", "Text"), ("P", "Draw"), ("⌘Z", "Undo"), ("⌫", "Delete"),
+        ("Space", "Pan"), ("/", "Link")
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -325,6 +330,7 @@ struct ToolPaletteView: View {
             if controller.selectionCount >= 2 {
                 section("Align") { alignRow }
             }
+            shortcutStrip
             bottomBar
         }
         .font(.system(size: 12))
@@ -405,6 +411,39 @@ struct ToolPaletteView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var shortcutStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 5) {
+                Text("⌨")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                ForEach(shortcutHints, id: \.key) { hint in
+                    shortcutChip(hint.key, hint.label)
+                }
+            }
+        }
+        .frame(height: 26)
+    }
+
+    private func shortcutChip(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 3) {
+            Text(key)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.16))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 4)
+        .background(Color.gray.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private func arrowheadSegment(start: Bool) -> some View {
