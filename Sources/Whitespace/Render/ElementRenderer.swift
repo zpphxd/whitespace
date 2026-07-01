@@ -269,17 +269,16 @@ final class ElementRenderer {
         let card = CGPath(roundedRect: r, cornerWidth: 9, cornerHeight: 9, transform: nil)
         ctx.addPath(card); ctx.setFillColor(NSColor(hex: 0x1e1e2e).cgColor); ctx.fillPath()
 
-        // Header bar (AI cells get a purple tint).
-        let isLLM = e.cellLanguage == "llm"
+        // Header bar.
         ctx.saveGState()
         ctx.addPath(card); ctx.clip()
-        ctx.setFillColor(NSColor(hex: isLLM ? 0x362a5c : 0x2a2a3c).cgColor)
+        ctx.setFillColor(NSColor(hex: 0x2a2a3c).cgColor)
         ctx.fill(CGRect(x: r.minX, y: r.minY, width: r.width, height: headerH))
         ctx.restoreGState()
-        let lang = isLLM ? "✦ Claude" : CellRunner.displayName(e.cellLanguage ?? "shell")
+        let lang = CellRunner.displayName(e.cellLanguage ?? "shell")
         let header = e.cellExecCount.map { "\(lang)   [\($0)]" } ?? lang
         drawMono(header, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
-                 size: 11, color: NSColor(hex: isLLM ? 0xc4b5fd : 0x9aa0b4), in: ctx)
+                 size: 11, color: NSColor(hex: 0x9aa0b4), in: ctx)
         // Test cells show a PASS / FAIL / TEST badge.
         if e.cellKind == "test" {
             let label: String, col: NSColor
@@ -299,7 +298,7 @@ final class ElementRenderer {
         ctx.addLine(to: CGPoint(x: tri.minX, y: tri.maxY))
         ctx.addLine(to: CGPoint(x: tri.maxX, y: tri.midY))
         ctx.closePath()
-        ctx.setFillColor(NSColor(hex: isLLM ? 0xa78bfa : 0x40c057).cgColor); ctx.fillPath()
+        ctx.setFillColor(NSColor(hex: 0x40c057).cgColor); ctx.fillPath()
 
         // Source.
         drawMonoBlock(e.text ?? "", in: codeRect.insetBy(dx: 12, dy: 8),

@@ -23,8 +23,6 @@ final class CanvasController: ObservableObject {
     var insertImageAction: (() -> Void)?
     var insertCellAction: ((String) -> Void)?
     var insertTestCellAction: (() -> Void)?
-    var insertLLMCellAction: (() -> Void)?
-    var setApiKeyAction: (() -> Void)?
     var exportNotebookAction: (() -> Void)?     // export cells → .ipynb
     var openNotebookAction: (() -> Void)?       // import a .ipynb onto the canvas
     var runGraphAction: (() -> Void)?

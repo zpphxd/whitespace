@@ -144,7 +144,6 @@ struct InspectorView: View {
             Divider()
             Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
             Button("Configure Hotkeys…") { controller.configureHotkeysAction?() }
-            Button("Set API Key…") { controller.setApiKeyAction?() }
             Divider()
             Button("Export as Notebook (.ipynb)…") { controller.exportNotebookAction?() }
             Button("Open Notebook (.ipynb)…") { controller.openNotebookAction?() }
