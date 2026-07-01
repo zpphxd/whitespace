@@ -274,7 +274,8 @@ final class ElementRenderer {
         ctx.fill(CGRect(x: r.minX, y: r.minY, width: r.width, height: headerH))
         ctx.restoreGState()
         let lang = CellRunner.displayName(e.cellLanguage ?? "shell")
-        drawMono(lang, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
+        let header = e.cellExecCount.map { "\(lang)   [\($0)]" } ?? lang
+        drawMono(header, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
                  size: 11, color: NSColor(hex: 0x9aa0b4), in: ctx)
         // Run glyph (green triangle) at the right of the header.
         let tri = CGRect(x: r.maxX - 26, y: r.minY + 8, width: 11, height: 11)
@@ -297,11 +298,14 @@ final class ElementRenderer {
             ctx.setStrokeColor(NSColor(hex: 0x33334a).cgColor); ctx.setLineWidth(1)
             ctx.move(to: CGPoint(x: r.minX, y: outRect.minY)); ctx.addLine(to: CGPoint(x: r.maxX, y: outRect.minY)); ctx.strokePath()
             ctx.restoreGState()
+            let outColor = e.cellFailed == true ? NSColor(hex: 0xff6b6b) : NSColor(hex: 0x8de08d)
             drawMonoBlock(e.cellOutput ?? "", in: outRect.insetBy(dx: 12, dy: 7),
-                          size: 11.5, color: NSColor(hex: 0x8de08d), in: ctx)
+                          size: 11.5, color: outColor, in: ctx)
         }
 
-        ctx.addPath(card); ctx.setStrokeColor(NSColor(hex: 0x3a3a52).cgColor); ctx.setLineWidth(1); ctx.strokePath()
+        let border = e.cellFailed == true ? NSColor(hex: 0xe03131) : NSColor(hex: 0x3a3a52)
+        ctx.addPath(card); ctx.setStrokeColor(border.cgColor)
+        ctx.setLineWidth(e.cellFailed == true ? 1.5 : 1); ctx.strokePath()
         ctx.restoreGState()
     }
 

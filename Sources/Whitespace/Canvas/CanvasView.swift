@@ -73,6 +73,7 @@ final class CanvasView: NSView {
     private var pipePulses: [String: Double] = [:]
     private var graphOrder: [String] = []
     private var graphOutputs: [String: String] = [:]
+    private var execCounter = 0   // Jupyter-style [n], increments per cell run
     private var clipboard: [Element] = []
     private let chartWheel = ChartWheelWindow()
 
@@ -1706,13 +1707,15 @@ final class CanvasView: NSView {
         let input = ups.map { scene.element($0)?.cellOutput ?? "" }.joined(separator: "\n")
         ups.forEach { pulsePipe(from: $0, to: id) }
         runningCells.insert(id)
-        scene.update(id: id) { $0.cellOutput = "running…" }
+        scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        CellRunner.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
+        Kernels.shared.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] output, failed in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                self.execCounter += 1
+                let n = self.execCounter
                 self.runningCells.remove(id)
-                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.scene.update(id: id) { $0.cellOutput = output; $0.cellFailed = failed; $0.cellExecCount = n }
                 self.renderer.invalidate(id)
                 self.needsDisplay = true
                 self.onSceneChange?()
@@ -1786,13 +1789,15 @@ final class CanvasView: NSView {
         let ups = incomingCells(of: id)
         let input = ups.map { graphOutputs[$0] ?? "" }.joined(separator: "\n")
         ups.forEach { pulsePipe(from: $0, to: id) }
-        scene.update(id: id) { $0.cellOutput = "running…" }
+        scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        CellRunner.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
+        Kernels.shared.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] output, failed in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.graphOutputs[id] = result.output
-                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.execCounter += 1
+                let n = self.execCounter
+                self.graphOutputs[id] = output
+                self.scene.update(id: id) { $0.cellOutput = output; $0.cellFailed = failed; $0.cellExecCount = n }
                 self.renderer.invalidate(id); self.needsDisplay = true; self.onSceneChange?()
                 // Brief pause so the pulse into the next cell reads clearly.
                 Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in

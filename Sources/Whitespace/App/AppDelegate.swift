@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.insertImageAction = { [weak self] in self?.insertImage() }
         controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
+        controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setEditOpacity = { [weak self] v in
             Settings.editBoardOpacity = v; self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true

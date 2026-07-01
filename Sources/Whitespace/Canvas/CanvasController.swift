@@ -23,6 +23,7 @@ final class CanvasController: ObservableObject {
     var insertImageAction: (() -> Void)?
     var insertCellAction: ((String) -> Void)?
     var runGraphAction: (() -> Void)?
+    var restartKernelsAction: (() -> Void)?     // drop persistent sessions → fresh state
     var clearBoardAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).

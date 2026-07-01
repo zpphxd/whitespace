@@ -52,6 +52,9 @@ struct TopToolbarView: View {
                 Button("Python") { controller.insertCellAction?("python") }
                 Button("JavaScript") { controller.insertCellAction?("javascript") }
                 Button("Ruby") { controller.insertCellAction?("ruby") }
+                Divider()
+                Button("Run Graph (⌘⇧↵)") { controller.runGraphAction?() }
+                Button("Restart Kernels") { controller.restartKernelsAction?() }
             } label: {
                 Image(systemName: "terminal").frame(width: 30, height: 32)
             }
