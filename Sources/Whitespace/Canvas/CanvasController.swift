@@ -32,7 +32,7 @@ final class CanvasController: ObservableObject {
     var setLinkStyleAction: ((String) -> Void)?
     var setStayOnWallpaperAction: ((Bool) -> Void)?
     var openShortcutsAction: (() -> Void)?
-    // Cross-cutting hooks (implemented by feature work; declared here so callers compile).
+    // Cross-cutting hooks (wired in AppDelegate).
     var openSearchAction: (() -> Void)?            // Cmd+F: search text across all boards
     var connectVaultAction: (() -> Void)?          // bind the current board to an Obsidian vault
     var focusElementAction: ((String) -> Void)?    // select + center an element by id (search jump)

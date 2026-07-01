@@ -1037,6 +1037,21 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// Select an element (by id) and center the camera on it, keeping the current
+    /// zoom. Used by cross-board search to jump straight to a hit.
+    func focusElement(_ id: String) {
+        guard let e = scene.element(id) else { return }
+        scene.selection = [id]
+        let r = e.boundingRect
+        let center = CGPoint(x: r.midX, y: r.midY)
+        // `offset` is the scene point at the view's top-left; place the element's
+        // center at the view's center (zoom unchanged).
+        camera.offset = CGPoint(x: center.x - bounds.midX / camera.zoom,
+                                y: center.y - bounds.midY / camera.zoom)
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
         addLink(link: path, name: (path as NSString).lastPathComponent)

@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var boards: [BoardDoc] = []
     private var currentBoard = 0
     private var shortcuts: ShortcutsWindow!
+    private var searchWindow: SearchWindow!
 
     private var autosaveItem: DispatchWorkItem?
     private var pendingOpenURL: URL?
@@ -53,6 +54,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         topToolbar = TopToolbarWindow(controller: controller)
         inspector = InspectorWindow(controller: controller)
+        searchWindow = SearchWindow(
+            query: { [weak self] q in self?.searchBoards(q) ?? [] },
+            onPick: { [weak self] hit in self?.jumpToHit(hit) })
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
@@ -80,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, !self.window.isEditing else { return }
             on ? self.window.orderFront(nil) : self.window.orderOut(nil)   // apply now if idle
         }
+        controller.openSearchAction = { [weak self] in self?.openSearch() }
+        controller.connectVaultAction = { [weak self] in self?.connectVault() }
+        controller.focusElementAction = { [weak self] id in self?.canvas.focusElement(id) }
 
         // Route canvas keyboard shortcuts (tool keys, arrows, delete, "/", …) to
         // the canvas whichever chrome panel happens to be key — but never while
@@ -116,7 +123,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onExportHTML: { [weak self] in self?.export(.html) },
             onLinkFile: { [weak self] in self?.linkFile() },
             onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true },
-            onOpenFile: { [weak self] in self?.openExcalidrawFile() }
+            onOpenFile: { [weak self] in self?.openExcalidrawFile() },
+            onSearch: { [weak self] in self?.openSearch() },
+            onConnectVault: { [weak self] in self?.connectVault() },
+            onInsertVaultNote: { [weak self] in self?.insertVaultNote() }
         )
 
         registerHotKeys()
@@ -324,6 +334,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .html:
             try? Export.html(scene.elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+
+    // MARK: Cross-board search
+
+    /// Open the Liquid Glass search panel over all boards (⌘F).
+    private func openSearch() {
+        boards[currentBoard].elements = scene.elements   // include unsaved edits
+        NSApp.activate(ignoringOtherApps: true)
+        searchWindow.show()
+    }
+
+    /// Case-insensitive match against every element's text + link, across all
+    /// boards. Returns hits with the board and element to jump to.
+    private func searchBoards(_ query: String) -> [SearchHit] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return [] }
+        var hits: [SearchHit] = []
+        for (bi, board) in boards.enumerated() {
+            for e in board.elements {
+                let text = e.text ?? ""
+                let link = e.link ?? ""
+                guard text.lowercased().contains(q) || link.lowercased().contains(q) else { continue }
+                let raw = !text.isEmpty ? text : link
+                let snippet = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\n", with: " ")
+                hits.append(SearchHit(boardIndex: bi, boardName: board.name,
+                                      elementId: e.id, snippet: snippet.isEmpty ? "(untitled)" : snippet))
+            }
+        }
+        return hits
+    }
+
+    /// Switch to the hit's board (same path as selecting a tab) and center it.
+    private func jumpToHit(_ hit: SearchHit) {
+        if hit.boardIndex != currentBoard { selectBoard(hit.boardIndex) }
+        controller.focusElementAction?(hit.elementId)
+    }
+
+    // MARK: Obsidian vault
+
+    /// Bind the current board to an Obsidian vault folder (persisted per board).
+    private func connectVault() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Connect"
+        panel.message = "Choose your Obsidian vault folder"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        boards[currentBoard].vaultPath = url.path
+        saveNow()
+    }
+
+    /// Pick a note from the connected vault and drop it as an `obsidian://` link.
+    private func insertVaultNote() {
+        guard boards.indices.contains(currentBoard),
+              let vaultPath = boards[currentBoard].vaultPath else {
+            let alert = NSAlert()
+            alert.messageText = "No vault connected"
+            alert.informativeText = "Connect an Obsidian vault to this board first (Connect Obsidian Vault…)."
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            return
+        }
+        let vaultURL = URL(fileURLWithPath: vaultPath)
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = vaultURL
+        if let md = UTType(filenameExtension: "md") { panel.allowedContentTypes = [md] }
+        panel.prompt = "Insert"
+        panel.message = "Choose a note from the vault"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let noteURL = panel.url else { return }
+
+        // obsidian://open?vault=<folderName>&file=<relativePathWithoutExtension>
+        let vaultName = vaultURL.lastPathComponent
+        let vaultBase = vaultURL.standardizedFileURL.path
+        let notePath = noteURL.standardizedFileURL.path
+        var relative = notePath.hasPrefix(vaultBase + "/")
+            ? String(notePath.dropFirst(vaultBase.count + 1))
+            : noteURL.lastPathComponent
+        if relative.hasSuffix(".md") { relative = String(relative.dropLast(3)) }
+
+        let allowed = CharacterSet.urlQueryAllowed
+        let vaultEnc = vaultName.addingPercentEncoding(withAllowedCharacters: allowed) ?? vaultName
+        let fileEnc = relative.addingPercentEncoding(withAllowedCharacters: allowed) ?? relative
+        let link = "obsidian://open?vault=\(vaultEnc)&file=\(fileEnc)"
+        canvas.addLink(link: link, name: noteURL.deletingPathExtension().lastPathComponent)
     }
 
     /// Pick a file/folder with the native panel and drop a linked node.
