@@ -1165,38 +1165,19 @@ final class CanvasView: NSView {
     }
 
     private var contextPath: String?
-    private var contextURL: String?
-
-    /// A URL to encode as a QR code for this element: its `link` (if it's a URL /
-    /// app link), or the text of a text element that is itself a URL.
-    private func qrURL(for e: Element) -> String? {
-        if let l = e.link, l.contains("://") { return l }
-        if e.type == "text", let t = e.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-           t.contains("://"), !t.contains(" ") { return t }
-        return nil
-    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard isEditing else { return nil }
         let p = camera.viewToScene(viewPoint(event))
-        guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) else { return nil }
+        guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
+              hit.type == "file" || hit.type == "image",
+              let link = hit.link, !link.contains("://") else { return nil }
         scene.selection = [hit.id]; updateSelectionState(); needsDisplay = true
-
+        contextPath = (link as NSString).expandingTildeInPath
         let menu = NSMenu()
-        // Local file / image node: Finder actions.
-        if (hit.type == "file" || hit.type == "image"), let link = hit.link, !link.contains("://") {
-            contextPath = (link as NSString).expandingTildeInPath
-            menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
-            menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
-            menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
-        }
-        // URL / app-link node (or a URL text): open + one-click QR.
-        if let url = qrURL(for: hit) {
-            contextURL = url
-            menu.addItem(withTitle: "Open Link", action: #selector(ctxOpenURL), keyEquivalent: "")
-            menu.addItem(withTitle: "Turn into QR Code", action: #selector(ctxMakeQR), keyEquivalent: "")
-        }
-        guard !menu.items.isEmpty else { return nil }
+        menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
+        menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
+        menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Delete", action: #selector(ctxDelete), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
@@ -1210,32 +1191,7 @@ final class CanvasView: NSView {
     @objc private func ctxReveal() {
         if let p = contextPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
     }
-    @objc private func ctxOpenURL() { if let u = contextURL { openLink(u) } }
-    @objc private func ctxMakeQR() {
-        guard let u = contextURL, let id = scene.selection.first, let e = scene.element(id) else { return }
-        makeQRCode(for: u, replacing: e)
-    }
     @objc private func ctxDelete() { deleteSelectionAction() }
-
-    /// Generate a QR code for `url` and drop it as an image element beside `e`.
-    /// Replace a link element with a QR code encoding its URL (the URL lives in
-    /// the code, so we don't keep the original link node too).
-    private func makeQRCode(for url: String, replacing e: Element) {
-        guard let path = QRCode.generatePNG(for: url) else { return }
-        let r = e.boundingRect
-        let size = 180.0
-        scene.beginEdit()
-        var qr = makeElement(type: "image", x: r.midX - size / 2, y: r.midY - size / 2, width: size, height: size)
-        qr.link = path
-        qr.backgroundColor = "transparent"
-        renderer.invalidate(e.id)
-        scene.remove(id: e.id)
-        scene.add(qr)
-        scene.selection = [qr.id]
-        controller.tool = .select
-        updateSelectionState()
-        needsDisplay = true
-    }
 
     private func makeElement(type: String, x: Double, y: Double, width: Double, height: Double) -> Element {
         let s = controller.style
@@ -1407,11 +1363,6 @@ final class CanvasView: NSView {
         e.strokeColor = controller.style.strokeColor
         e.width = Double(width) + 8
         e.height = size * 1.25 * Double(lines.count)
-        // A pasted bare URL becomes a clickable link (matches typing one).
-        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.contains("://"), !trimmed.contains(" "), !trimmed.contains("\n") {
-            e.link = trimmed
-        }
         scene.add(e)
         scene.selection = [e.id]
         updateSelectionState()
@@ -1487,10 +1438,15 @@ final class CanvasView: NSView {
             if selectedFileURL() != nil { toggleQuickLook(); return }
             spaceDown = true; return
         }
-        if event.charactersIgnoringModifiers == "/" { onSlashSearch?(); return }
-
         let cmd = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
+        let option = event.modifierFlags.contains(.option)
+        // "/" opens the file-link search; "?" (⇧/) opens the shortcuts cheat sheet.
+        if event.charactersIgnoringModifiers == "/" {
+            shift ? controller.openShortcutsAction?() : onSlashSearch?(); return
+        }
+        // ⇧1 fits the whole board to the view.
+        if shift, event.keyCode == 18 { zoomToFit(); return }
         if cmd, let ch = event.charactersIgnoringModifiers {
             switch ch {
             case "z": shift ? scene.redo() : scene.undo()
@@ -1499,12 +1455,30 @@ final class CanvasView: NSView {
             case "x": copySelection(); deleteSelectionAction(); return
             case "v": paste(); return
             case "a": scene.selection = Set(scene.elements.map(\.id)); updateSelectionState(); needsDisplay = true; return
+            case "0": resetZoom(); return
+            case "=", "+":
+                camera.zoom(by: 1.1, around: CGPoint(x: bounds.midX, y: bounds.midY)); needsDisplay = true; return
+            case "-":
+                camera.zoom(by: 1 / 1.1, around: CGPoint(x: bounds.midX, y: bounds.midY)); needsDisplay = true; return
+            case "k": controller.linkURLAction?(); return
+            case "f": controller.openSearchAction?(); return
+            default: break
+            }
+        }
+        // ⌥Arrow nudges the camera around the canvas.
+        if option {
+            switch event.keyCode {
+            case 123: panCanvas(40, 0); return   // left
+            case 124: panCanvas(-40, 0); return  // right
+            case 126: panCanvas(0, 40); return   // up
+            case 125: panCanvas(0, -40); return  // down
             default: break
             }
         }
         switch event.keyCode {
         case 51, 117: deleteSelectionAction(); return // delete / fwd-delete
         case 53: scene.selection.removeAll(); updateSelectionState(); needsDisplay = true; return // esc
+        case 36, 76: editSelectedText(); return       // return / enter → edit selected text
         default: break
         }
         if let ch = event.charactersIgnoringModifiers?.first,
@@ -1517,6 +1491,41 @@ final class CanvasView: NSView {
 
     override func keyUp(with event: NSEvent) {
         if event.keyCode == 49 { spaceDown = false }
+    }
+
+    // MARK: Zoom & pan shortcuts
+
+    /// Fit every element on the board into the view (⇧1), with a little padding.
+    private func zoomToFit() {
+        guard bounds.width > 0, bounds.height > 0, let content = Export.contentBounds(scene.elements) else { return }
+        let z = max(Camera.minZoom, min(Camera.maxZoom,
+                    min(bounds.width / (content.width + 80), bounds.height / (content.height + 80))))
+        camera.zoom = z
+        camera.offset = CGPoint(x: content.midX - (bounds.width / 2) / z,
+                                y: content.midY - (bounds.height / 2) / z)
+        needsDisplay = true
+    }
+
+    /// Reset to 1× while keeping whatever's at the view center in place (⌘0).
+    private func resetZoom() {
+        let c = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        camera.zoom = 1
+        camera.offset = CGPoint(x: c.x - bounds.midX, y: c.y - bounds.midY)
+        needsDisplay = true
+    }
+
+    /// Nudge the camera by a view-space delta (⌥Arrow).
+    private func panCanvas(_ dx: CGFloat, _ dy: CGFloat) {
+        camera.pan(byViewDelta: CGSize(width: dx, height: dy))
+        needsDisplay = true
+    }
+
+    /// Return / Enter on a single selected element edits its text.
+    private func editSelectedText() {
+        guard scene.selection.count == 1, let id = scene.selection.first, let e = scene.element(id) else { return }
+        if e.type == "text" { beginEditingText(e) }
+        else if ["rectangle", "ellipse", "diamond"].contains(e.type) { beginContainerText(e) }
+        else if e.type == "cell" { beginEditingCell(e) }
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -1627,11 +1636,6 @@ final class CanvasView: NSView {
                     let width = (value as NSString).size(withAttributes: [.font: Fonts.font(family: family, size: size)]).width
                     e.width = Double(width) + 8
                     e.height = Double(size) * 1.25
-                }
-                // A bare URL auto-links so it's clickable / QR-able.
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.contains("://"), !trimmed.contains(" "), !trimmed.contains("\n") {
-                    e.link = trimmed
                 }
             }
             renderer.invalidate(id)

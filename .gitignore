@@ -11,3 +11,4 @@ Whitespace.app/
 
 # Logs
 *.log
+.claude/worktrees/
