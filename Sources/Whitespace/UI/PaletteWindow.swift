@@ -38,6 +38,10 @@ class ChromePanelWindow {
         panel.collectionBehavior = [.moveToActiveSpace, .ignoresCycle]
         panel.backgroundColor = .clear
         panel.isOpaque = false
+        // Pin both chrome panels to the same (light) appearance so their Liquid
+        // Glass matches — otherwise glassEffect adapts each window independently
+        // and the taller inspector renders dark while the toolbar renders light.
+        panel.appearance = NSAppearance(named: .aqua)
     }
 
     func show() {
