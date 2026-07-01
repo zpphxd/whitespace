@@ -17,10 +17,11 @@ final class DesktopWindow: NSWindow {
         rawValue: Int(CGWindowLevelForKey(.desktopWindow))
     )
 
-    /// A hair above the desktop-icon level so edit-mode clicks land on us.
-    private static let editLevel = NSWindow.Level(
-        rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1
-    )
+    /// While editing, sit at the normal window level so the canvas draws *above*
+    /// the desktop-icon layer AND macOS desktop widgets (which live in the
+    /// negative desktop region and were cutting through the drawing). The
+    /// floating palette (level 3) still stays on top.
+    private static let editLevel = NSWindow.Level.normal
 
     private(set) var isEditing = false
 
