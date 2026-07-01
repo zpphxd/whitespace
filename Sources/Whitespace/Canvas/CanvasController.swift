@@ -22,7 +22,11 @@ final class CanvasController: ObservableObject {
     var linkURLAction: (() -> Void)?
     var insertImageAction: (() -> Void)?
     var insertCellAction: ((String) -> Void)?
+    var insertTestCellAction: (() -> Void)?
+    var exportNotebookAction: (() -> Void)?     // export cells → .ipynb
+    var openNotebookAction: (() -> Void)?       // import a .ipynb onto the canvas
     var runGraphAction: (() -> Void)?
+    var restartKernelsAction: (() -> Void)?     // drop persistent sessions → fresh state
     var clearBoardAction: (() -> Void)?
 
     // Settings actions (exposed via the palette gear menu).
@@ -31,8 +35,9 @@ final class CanvasController: ObservableObject {
     var setLinkColorAction: ((String) -> Void)?
     var setLinkStyleAction: ((String) -> Void)?
     var setStayOnWallpaperAction: ((Bool) -> Void)?
-    var openShortcutsAction: (() -> Void)?
-    // Cross-cutting hooks (implemented by feature work; declared here so callers compile).
+    var openShortcutsAction: (() -> Void)?          // "?" → shortcuts cheat sheet
+    var configureHotkeysAction: (() -> Void)?       // rebind the ⌥⌘W / ⌥⌘Q global hotkeys
+    // Cross-cutting hooks (wired in AppDelegate).
     var openSearchAction: (() -> Void)?            // Cmd+F: search text across all boards
     var connectVaultAction: (() -> Void)?          // bind the current board to an Obsidian vault
     var focusElementAction: ((String) -> Void)?    // select + center an element by id (search jump)

@@ -5,9 +5,22 @@ struct BoardDoc: Codable, Identifiable {
     var id: String
     var name: String
     var elements: [Element]
+    /// Folder of a connected Obsidian vault, if the user bound one to this board.
+    var vaultPath: String?
 
-    init(id: String = UUID().uuidString, name: String, elements: [Element] = []) {
-        self.id = id; self.name = name; self.elements = elements
+    init(id: String = UUID().uuidString, name: String, elements: [Element] = [], vaultPath: String? = nil) {
+        self.id = id; self.name = name; self.elements = elements; self.vaultPath = vaultPath
+    }
+
+    // Decode vaultPath if present so older workspaces (without the field) still load.
+    enum CodingKeys: String, CodingKey { case id, name, elements, vaultPath }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        elements = try c.decode([Element].self, forKey: .elements)
+        vaultPath = try c.decodeIfPresent(String.self, forKey: .vaultPath)
     }
 }
 

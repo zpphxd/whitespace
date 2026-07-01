@@ -18,6 +18,9 @@ final class MenuBarController {
     private var linkFile: (() -> Void)?
     private var setLinkColor: ((String) -> Void)?
     private var openFile: (() -> Void)?
+    private var search: (() -> Void)?
+    private var connectVault: (() -> Void)?
+    private var insertVaultNote: (() -> Void)?
     private let paletteItem: NSMenuItem
 
     init(onToggleEdit: @escaping () -> Void,
@@ -30,7 +33,10 @@ final class MenuBarController {
          onExportHTML: @escaping () -> Void,
          onLinkFile: @escaping () -> Void,
          onSetLinkColor: @escaping (String) -> Void,
-         onOpenFile: @escaping () -> Void) {
+         onOpenFile: @escaping () -> Void,
+         onSearch: @escaping () -> Void,
+         onConnectVault: @escaping () -> Void,
+         onInsertVaultNote: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setEditOpacity = onSetEditOpacity
@@ -42,6 +48,9 @@ final class MenuBarController {
         self.linkFile = onLinkFile
         self.setLinkColor = onSetLinkColor
         self.openFile = onOpenFile
+        self.search = onSearch
+        self.connectVault = onConnectVault
+        self.insertVaultNote = onInsertVaultNote
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -73,10 +82,23 @@ final class MenuBarController {
         menu.addItem(makeBoardMenu())
         menu.addItem(.separator())
 
+        let searchItem = NSMenuItem(title: "Search Boards…", action: #selector(searchAction), keyEquivalent: "")
+        searchItem.target = self
+        menu.addItem(searchItem)
+        menu.addItem(.separator())
+
         let linkItem = NSMenuItem(title: "Link File…", action: #selector(linkFileAction), keyEquivalent: "")
         linkItem.target = self
         menu.addItem(linkItem)
         menu.addItem(makeLinkColorMenu())
+        menu.addItem(.separator())
+
+        let connectVaultItem = NSMenuItem(title: "Connect Obsidian Vault…", action: #selector(connectVaultAction), keyEquivalent: "")
+        connectVaultItem.target = self
+        menu.addItem(connectVaultItem)
+        let insertNoteItem = NSMenuItem(title: "Insert Vault Note…", action: #selector(insertVaultNoteAction), keyEquivalent: "")
+        insertNoteItem.target = self
+        menu.addItem(insertNoteItem)
         menu.addItem(.separator())
 
         let openItem = NSMenuItem(title: "Open .excalidraw…", action: #selector(openFileAction), keyEquivalent: "")
@@ -185,6 +207,9 @@ final class MenuBarController {
     @objc private func exportHTMLItemAction() { exportHTML?() }
     @objc private func linkFileAction() { linkFile?() }
     @objc private func openFileAction() { openFile?() }
+    @objc private func searchAction() { search?() }
+    @objc private func connectVaultAction() { connectVault?() }
+    @objc private func insertVaultNoteAction() { insertVaultNote?() }
     @objc private func toggleEdit() { onToggleEdit() }
     @objc private func quit(_ sender: Any?) { quitHandler?() }
 }

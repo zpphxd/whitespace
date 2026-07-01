@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: DesktopWindow!
     private var canvas: CanvasView!
     private var menuBar: MenuBarController!
-    private var palette: PaletteWindow!
+    private var topToolbar: TopToolbarWindow!   // centered top: tools row
+    private var inspector: InspectorWindow!     // left: tabs, gear, style controls
     private let controller = CanvasController()
     private var scene: Scene!
     private var paletteHidden = false
@@ -16,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var boards: [BoardDoc] = []
     private var currentBoard = 0
     private var shortcuts: ShortcutsWindow!
+    private var cheatSheet = CheatSheetWindow()
+    private var searchWindow: SearchWindow!
 
     private var autosaveItem: DispatchWorkItem?
     private var pendingOpenURL: URL?
@@ -50,7 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = canvas
         window.orderFront(nil)
 
-        palette = PaletteWindow(controller: controller)
+        topToolbar = TopToolbarWindow(controller: controller)
+        inspector = InspectorWindow(controller: controller)
+        searchWindow = SearchWindow(
+            query: { [weak self] q in self?.searchBoards(q) ?? [] },
+            onPick: { [weak self] hit in self?.jumpToHit(hit) })
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
@@ -58,7 +65,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.insertImageAction = { [weak self] in self?.insertImage() }
         controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
+        controller.insertTestCellAction = { [weak self] in self?.canvas.insertTestCell() }
+        controller.exportNotebookAction = { [weak self] in self?.export(.ipynb) }
+        controller.openNotebookAction = { [weak self] in self?.openNotebook() }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
+        controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
         controller.setEditOpacity = { [weak self] v in
             Settings.editBoardOpacity = v; self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
@@ -78,16 +89,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, !self.window.isEditing else { return }
             on ? self.window.orderFront(nil) : self.window.orderOut(nil)   // apply now if idle
         }
+        controller.openSearchAction = { [weak self] in self?.openSearch() }
+        controller.connectVaultAction = { [weak self] in self?.connectVault() }
+        controller.focusElementAction = { [weak self] id in self?.canvas.focusElement(id) }
 
-        // Catch "/" app-wide (works whichever of our windows is key), except
-        // while typing in a text field, so it always opens the file picker.
+        // Route canvas keyboard shortcuts (tool keys, arrows, delete, "/", …) to
+        // the canvas whichever chrome panel happens to be key — but never while
+        // typing in a text field. ⌘-combos keep the normal responder chain
+        // (performKeyEquivalent), so grouping/undo/etc. still work.
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.window.isEditing else { return event }
-            if event.charactersIgnoringModifiers == "/", !self.isTextEditing() {
-                self.linkFile()
-                return nil
-            }
-            return event
+            guard let self, self.window.isEditing, !self.isTextEditing(),
+                  !event.modifierFlags.contains(.command) else { return event }
+            self.canvas.keyDown(with: event)
+            return nil
         }
 
         controller.addTab = { [weak self] in self?.addBoard() }
@@ -114,13 +128,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onExportHTML: { [weak self] in self?.export(.html) },
             onLinkFile: { [weak self] in self?.linkFile() },
             onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true },
-            onOpenFile: { [weak self] in self?.openExcalidrawFile() }
+            onOpenFile: { [weak self] in self?.openExcalidrawFile() },
+            onSearch: { [weak self] in self?.openSearch() },
+            onConnectVault: { [weak self] in self?.connectVault() },
+            onInsertVaultNote: { [weak self] in self?.insertVaultNote() }
         )
 
         registerHotKeys()
         shortcuts = ShortcutsWindow()
         shortcuts.onChange = { [weak self] in self?.registerHotKeys() }
-        controller.openShortcutsAction = { [weak self] in self?.shortcuts.show() }
+        controller.openShortcutsAction = { [weak self] in self?.cheatSheet.toggle() }
+        controller.configureHotkeysAction = { [weak self] in self?.shortcuts.show() }
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
@@ -158,9 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.setEditing(editing)
         if editing {
             window.makeFirstResponder(canvas)
-            if !paletteHidden { palette.show() }
+            if !paletteHidden { showChrome() }
         } else {
-            palette.hide()
+            hideChrome()
             saveNow()
             // Optionally hide the whole canvas (clean desktop) instead of leaving
             // the drawings on the wallpaper.
@@ -168,11 +186,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Hide/show just the tool palette while staying in drawing mode (⌥⌘Q).
+    /// Show/hide both chrome panels (top toolbar + left inspector) together.
+    private func showChrome() { topToolbar.show(); inspector.show() }
+    private func hideChrome() {
+        topToolbar.hide(); inspector.hide()
+        cheatSheet.hide(); searchWindow?.close()   // transient overlays go with the chrome
+    }
+
+    /// Hide/show the whole tool palette (both panels) while staying in drawing
+    /// mode (⌥⌘Q).
     private func togglePalette() {
         guard window.isEditing else { return }
         paletteHidden.toggle()
-        paletteHidden ? palette.hide() : palette.show()
+        paletteHidden ? hideChrome() : showChrome()
         menuBar.setPaletteHidden(paletteHidden)
     }
 
@@ -263,12 +289,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = NSSavePanel()
         let name = boards[index].name
         panel.nameFieldStringValue = "\(name).\(kind)"
-        panel.allowedContentTypes = [kind == "png" ? .png : kind == "html" ? .html : .svg]
+        panel.allowedContentTypes = [kind == "png" ? .png : kind == "html" ? .html : kind == "ipynb" ? Self.ipynbType : .svg]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         switch kind {
         case "png": try? Export.png(elements)?.write(to: url, options: .atomic)
         case "html": try? Export.html(elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
+        case "ipynb": try? Notebook.exportIPYNB(elements)?.write(to: url, options: .atomic)
         default: try? Export.svg(elements)?.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -292,7 +319,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         saveNow()
     }
 
-    private enum ExportKind { case png, svg, html }
+    private enum ExportKind { case png, svg, html, ipynb }
+
+    private static let ipynbType = UTType(filenameExtension: "ipynb") ?? .json
 
     private func export(_ kind: ExportKind) {
         guard Export.contentBounds(scene.elements) != nil else {
@@ -303,10 +332,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let name = boards.indices.contains(currentBoard) ? boards[currentBoard].name : "whiteboard"
-        let ext = kind == .png ? "png" : kind == .html ? "html" : "svg"
+        let ext: String
+        let type: UTType
+        switch kind {
+        case .png: ext = "png"; type = .png
+        case .html: ext = "html"; type = .html
+        case .ipynb: ext = "ipynb"; type = Self.ipynbType
+        case .svg: ext = "svg"; type = .svg
+        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(name).\(ext)"
-        panel.allowedContentTypes = [kind == .png ? .png : kind == .html ? .html : .svg]
+        panel.allowedContentTypes = [type]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         switch kind {
@@ -316,7 +352,113 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
         case .html:
             try? Export.html(scene.elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
+        case .ipynb:
+            try? Notebook.exportIPYNB(scene.elements)?.write(to: url, options: .atomic)
         }
+    }
+
+    /// Import a `.ipynb` and lay its code cells out on the current board.
+    private func openNotebook() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [Self.ipynbType, .json]
+        panel.message = "Choose a Jupyter notebook to import"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        let cells = Notebook.importIPYNB(data, at: CGPoint(x: 80, y: 80))
+        guard !cells.isEmpty else { return }
+        canvas.addImportedCells(cells)
+    }
+
+    // MARK: Cross-board search
+
+    /// Open the Liquid Glass search panel over all boards (⌘F).
+    private func openSearch() {
+        boards[currentBoard].elements = scene.elements   // include unsaved edits
+        NSApp.activate(ignoringOtherApps: true)
+        searchWindow.show()
+    }
+
+    /// Case-insensitive match against every element's text + link, across all
+    /// boards. Returns hits with the board and element to jump to.
+    private func searchBoards(_ query: String) -> [SearchHit] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return [] }
+        var hits: [SearchHit] = []
+        for (bi, board) in boards.enumerated() {
+            for e in board.elements {
+                let text = e.text ?? ""
+                let link = e.link ?? ""
+                guard text.lowercased().contains(q) || link.lowercased().contains(q) else { continue }
+                let raw = !text.isEmpty ? text : link
+                let snippet = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\n", with: " ")
+                hits.append(SearchHit(boardIndex: bi, boardName: board.name,
+                                      elementId: e.id, snippet: snippet.isEmpty ? "(untitled)" : snippet))
+            }
+        }
+        return hits
+    }
+
+    /// Switch to the hit's board (same path as selecting a tab) and center it.
+    private func jumpToHit(_ hit: SearchHit) {
+        if hit.boardIndex != currentBoard { selectBoard(hit.boardIndex) }
+        controller.focusElementAction?(hit.elementId)
+    }
+
+    // MARK: Obsidian vault
+
+    /// Bind the current board to an Obsidian vault folder (persisted per board).
+    private func connectVault() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Connect"
+        panel.message = "Choose your Obsidian vault folder"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        boards[currentBoard].vaultPath = url.path
+        saveNow()
+    }
+
+    /// Pick a note from the connected vault and drop it as an `obsidian://` link.
+    private func insertVaultNote() {
+        guard boards.indices.contains(currentBoard),
+              let vaultPath = boards[currentBoard].vaultPath else {
+            let alert = NSAlert()
+            alert.messageText = "No vault connected"
+            alert.informativeText = "Connect an Obsidian vault to this board first (Connect Obsidian Vault…)."
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            return
+        }
+        let vaultURL = URL(fileURLWithPath: vaultPath)
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = vaultURL
+        if let md = UTType(filenameExtension: "md") { panel.allowedContentTypes = [md] }
+        panel.prompt = "Insert"
+        panel.message = "Choose a note from the vault"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let noteURL = panel.url else { return }
+
+        // obsidian://open?vault=<folderName>&file=<relativePathWithoutExtension>
+        let vaultName = vaultURL.lastPathComponent
+        let vaultBase = vaultURL.standardizedFileURL.path
+        let notePath = noteURL.standardizedFileURL.path
+        var relative = notePath.hasPrefix(vaultBase + "/")
+            ? String(notePath.dropFirst(vaultBase.count + 1))
+            : noteURL.lastPathComponent
+        if relative.hasSuffix(".md") { relative = String(relative.dropLast(3)) }
+
+        let allowed = CharacterSet.urlQueryAllowed
+        let vaultEnc = vaultName.addingPercentEncoding(withAllowedCharacters: allowed) ?? vaultName
+        let fileEnc = relative.addingPercentEncoding(withAllowedCharacters: allowed) ?? relative
+        let link = "obsidian://open?vault=\(vaultEnc)&file=\(fileEnc)"
+        canvas.addLink(link: link, name: noteURL.deletingPathExtension().lastPathComponent)
     }
 
     /// Pick a file/folder with the native panel and drop a linked node.

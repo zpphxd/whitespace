@@ -68,6 +68,11 @@ struct Element: Codable, Identifiable, Equatable {
     // Excalidraw schema — ignored by other tools, tolerated on decode.
     var cellLanguage: String?
     var cellOutput: String?
+    var cellExecCount: Int?   // Jupyter-style [n] run counter
+    var cellFailed: Bool?     // last run raised / exited non-zero
+    var cellOutputType: String?   // rich output: "image/png" | "table" | "text/html"
+    var cellOutputData: String?   // base64 (image) / JSON (table) / raw (html)
+    var cellKind: String?         // "test" → pass/fail assertion cell (nil = code)
 
     struct Roundness: Codable, Equatable {
         var type: Int
@@ -124,7 +129,12 @@ struct Element: Codable, Identifiable, Equatable {
         originalText: String? = nil,
         lineHeight: Double? = nil,
         cellLanguage: String? = nil,
-        cellOutput: String? = nil
+        cellOutput: String? = nil,
+        cellExecCount: Int? = nil,
+        cellFailed: Bool? = nil,
+        cellOutputType: String? = nil,
+        cellOutputData: String? = nil,
+        cellKind: String? = nil
     ) {
         self.id = id; self.type = type
         self.x = x; self.y = y; self.width = width; self.height = height; self.angle = angle
@@ -145,6 +155,9 @@ struct Element: Codable, Identifiable, Equatable {
         self.textAlign = textAlign; self.verticalAlign = verticalAlign
         self.containerId = containerId; self.originalText = originalText; self.lineHeight = lineHeight
         self.cellLanguage = cellLanguage; self.cellOutput = cellOutput
+        self.cellExecCount = cellExecCount; self.cellFailed = cellFailed
+        self.cellOutputType = cellOutputType; self.cellOutputData = cellOutputData
+        self.cellKind = cellKind
     }
 
     // Lenient decoding: tolerate any subset of keys (files from other tools vary).
@@ -197,5 +210,10 @@ struct Element: Codable, Identifiable, Equatable {
         lineHeight = try? c.decodeIfPresent(Double.self, forKey: .lineHeight)
         cellLanguage = try? c.decodeIfPresent(String.self, forKey: .cellLanguage)
         cellOutput = try? c.decodeIfPresent(String.self, forKey: .cellOutput)
+        cellExecCount = try? c.decodeIfPresent(Int.self, forKey: .cellExecCount)
+        cellFailed = try? c.decodeIfPresent(Bool.self, forKey: .cellFailed)
+        cellOutputType = try? c.decodeIfPresent(String.self, forKey: .cellOutputType)
+        cellOutputData = try? c.decodeIfPresent(String.self, forKey: .cellOutputData)
+        cellKind = try? c.decodeIfPresent(String.self, forKey: .cellKind)
     }
 }

@@ -73,6 +73,7 @@ final class CanvasView: NSView {
     private var pipePulses: [String: Double] = [:]
     private var graphOrder: [String] = []
     private var graphOutputs: [String: String] = [:]
+    private var execCounter = 0   // Jupyter-style [n], increments per cell run
     private var clipboard: [Element] = []
     private let chartWheel = ChartWheelWindow()
 
@@ -1037,6 +1038,21 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// Select an element (by id) and center the camera on it, keeping the current
+    /// zoom. Used by cross-board search to jump straight to a hit.
+    func focusElement(_ id: String) {
+        guard let e = scene.element(id) else { return }
+        scene.selection = [id]
+        let r = e.boundingRect
+        let center = CGPoint(x: r.midX, y: r.midY)
+        // `offset` is the scene point at the view's top-left; place the element's
+        // center at the view's center (zoom unchanged).
+        camera.offset = CGPoint(x: center.x - bounds.midX / camera.zoom,
+                                y: center.y - bounds.midY / camera.zoom)
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// Drop a linked file node at the center of the current view.
     func addFileNode(path: String) {
         addLink(link: path, name: (path as NSString).lastPathComponent)
@@ -1441,10 +1457,10 @@ final class CanvasView: NSView {
         let cmd = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
-        // "/" opens the file-link search; "?" (⇧/) opens the shortcuts cheat sheet.
-        if event.charactersIgnoringModifiers == "/" {
-            shift ? controller.openShortcutsAction?() : onSlashSearch?(); return
-        }
+        // "?" opens the shortcuts window; "/" opens the file-link search.
+        // (charactersIgnoringModifiers keeps Shift, so ⇧/ reads as "?", not "/".)
+        if event.charactersIgnoringModifiers == "?" { controller.openShortcutsAction?(); return }
+        if event.charactersIgnoringModifiers == "/" { onSlashSearch?(); return }
         // ⇧1 fits the whole board to the view.
         if shift, event.keyCode == 18 { zoomToFit(); return }
         if cmd, let ch = event.charactersIgnoringModifiers {
@@ -1673,6 +1689,34 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// A test cell: passes if it runs without raising; the header shows PASS/FAIL.
+    /// Wire an upstream cell into it and assert on `IN`.
+    func insertTestCell() {
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "cell", x: center.x - 210, y: center.y - 80, width: 420, height: 160)
+        e.cellLanguage = "python"
+        e.cellKind = "test"
+        e.text = "# Passes unless an assert fails. `IN` = upstream output.\nassert 1 + 1 == 2, \"math is broken\"\nprint(\"ok\")"
+        e.backgroundColor = "transparent"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
+    /// Drop imported notebook cells onto the board and select them.
+    func addImportedCells(_ cells: [Element]) {
+        guard !cells.isEmpty else { return }
+        scene.beginEdit()
+        for e in cells { scene.add(e) }
+        scene.selection = Set(cells.map(\.id))
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// The scene-space hit area for a cell's run glyph (header, top-right).
     private func cellRunHitRect(_ e: Element) -> CGRect {
         let r = e.rect
@@ -1691,13 +1735,18 @@ final class CanvasView: NSView {
         let input = ups.map { scene.element($0)?.cellOutput ?? "" }.joined(separator: "\n")
         ups.forEach { pulsePipe(from: $0, to: id) }
         runningCells.insert(id)
-        scene.update(id: id) { $0.cellOutput = "running…" }
+        scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        CellRunner.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
+        Kernels.shared.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                self.execCounter += 1
+                let n = self.execCounter
                 self.runningCells.remove(id)
-                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.scene.update(id: id) {
+                    $0.cellOutput = result.text; $0.cellFailed = result.failed; $0.cellExecCount = n
+                    $0.cellOutputType = result.mimeType; $0.cellOutputData = result.mimeData
+                }
                 self.renderer.invalidate(id)
                 self.needsDisplay = true
                 self.onSceneChange?()
@@ -1771,13 +1820,18 @@ final class CanvasView: NSView {
         let ups = incomingCells(of: id)
         let input = ups.map { graphOutputs[$0] ?? "" }.joined(separator: "\n")
         ups.forEach { pulsePipe(from: $0, to: id) }
-        scene.update(id: id) { $0.cellOutput = "running…" }
+        scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        CellRunner.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
+        Kernels.shared.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.graphOutputs[id] = result.output
-                self.scene.update(id: id) { $0.cellOutput = result.output }
+                self.execCounter += 1
+                let n = self.execCounter
+                self.graphOutputs[id] = result.text
+                self.scene.update(id: id) {
+                    $0.cellOutput = result.text; $0.cellFailed = result.failed; $0.cellExecCount = n
+                    $0.cellOutputType = result.mimeType; $0.cellOutputData = result.mimeData
+                }
                 self.renderer.invalidate(id); self.needsDisplay = true; self.onSceneChange?()
                 // Brief pause so the pulse into the next cell reads clearly.
                 Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in

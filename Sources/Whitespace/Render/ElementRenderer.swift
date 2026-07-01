@@ -257,8 +257,10 @@ final class ElementRenderer {
     private func drawCell(_ e: Element, opacity: CGFloat, in ctx: CGContext) {
         let r = e.rect
         let headerH: CGFloat = 26
-        let hasOutput = !(e.cellOutput ?? "").isEmpty
-        let outputH: CGFloat = hasOutput ? max(40, (r.height - headerH) * 0.42) : 0
+        let hasRich = e.cellOutputType != nil && e.cellOutputData != nil
+        let hasOutput = hasRich || !(e.cellOutput ?? "").isEmpty
+        let outputH: CGFloat = hasOutput
+            ? max(hasRich ? 130 : 40, (r.height - headerH) * (hasRich ? 0.55 : 0.42)) : 0
         let codeRect = CGRect(x: r.minX, y: r.minY + headerH, width: r.width,
                               height: r.height - headerH - outputH)
 
@@ -274,8 +276,21 @@ final class ElementRenderer {
         ctx.fill(CGRect(x: r.minX, y: r.minY, width: r.width, height: headerH))
         ctx.restoreGState()
         let lang = CellRunner.displayName(e.cellLanguage ?? "shell")
-        drawMono(lang, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
+        let header = e.cellExecCount.map { "\(lang)   [\($0)]" } ?? lang
+        drawMono(header, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
                  size: 11, color: NSColor(hex: 0x9aa0b4), in: ctx)
+        // Test cells show a PASS / FAIL / TEST badge.
+        if e.cellKind == "test" {
+            let label: String, col: NSColor
+            if e.cellExecCount == nil { label = "TEST"; col = NSColor(hex: 0x9aa0b4) }
+            else if e.cellFailed == true { label = "FAIL"; col = NSColor(hex: 0xe03131) }
+            else { label = "PASS"; col = NSColor(hex: 0x40c057) }
+            let pill = CGRect(x: r.maxX - 96, y: r.minY + 6, width: 52, height: 15)
+            ctx.addPath(CGPath(roundedRect: pill, cornerWidth: 4, cornerHeight: 4, transform: nil))
+            ctx.setFillColor(col.withAlphaComponent(0.18).cgColor); ctx.fillPath()
+            drawMono(label, in: pill.insetBy(dx: 8, dy: 1), size: 10, color: col, in: ctx)
+        }
+
         // Run glyph (green triangle) at the right of the header.
         let tri = CGRect(x: r.maxX - 26, y: r.minY + 8, width: 11, height: 11)
         ctx.beginPath()
@@ -297,12 +312,64 @@ final class ElementRenderer {
             ctx.setStrokeColor(NSColor(hex: 0x33334a).cgColor); ctx.setLineWidth(1)
             ctx.move(to: CGPoint(x: r.minX, y: outRect.minY)); ctx.addLine(to: CGPoint(x: r.maxX, y: outRect.minY)); ctx.strokePath()
             ctx.restoreGState()
-            drawMonoBlock(e.cellOutput ?? "", in: outRect.insetBy(dx: 12, dy: 7),
-                          size: 11.5, color: NSColor(hex: 0x8de08d), in: ctx)
+            let inset = outRect.insetBy(dx: 12, dy: 7)
+            let rawData = e.cellOutputData.flatMap { Data(base64Encoded: $0) }
+            if e.cellOutputType == "image/png", let data = rawData {
+                drawCellImage(data, in: inset, in: ctx)
+            } else if e.cellOutputType == "table", let data = rawData {
+                drawCellTable(data, in: inset, in: ctx)
+            } else {
+                let outColor = e.cellFailed == true ? NSColor(hex: 0xff6b6b) : NSColor(hex: 0x8de08d)
+                drawMonoBlock(e.cellOutput ?? "", in: inset, size: 11.5, color: outColor, in: ctx)
+            }
         }
 
-        ctx.addPath(card); ctx.setStrokeColor(NSColor(hex: 0x3a3a52).cgColor); ctx.setLineWidth(1); ctx.strokePath()
+        let border = e.cellFailed == true ? NSColor(hex: 0xe03131) : NSColor(hex: 0x3a3a52)
+        ctx.addPath(card); ctx.setStrokeColor(border.cgColor)
+        ctx.setLineWidth(e.cellFailed == true ? 1.5 : 1); ctx.strokePath()
         ctx.restoreGState()
+    }
+
+    /// A rich image output (e.g. a matplotlib plot), aspect-fit in the panel.
+    private func drawCellImage(_ data: Data, in rect: CGRect, in ctx: CGContext) {
+        guard rect.width > 4, rect.height > 4, let img = NSImage(data: data),
+              let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let iw = CGFloat(cg.width), ih = CGFloat(cg.height)
+        let scale = min(rect.width / iw, rect.height / ih)
+        let w = iw * scale, h = ih * scale
+        let x = rect.midX - w / 2, y = rect.minY + (rect.height - h) / 2
+        ctx.saveGState()
+        ctx.translateBy(x: x, y: y + h); ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.restoreGState()
+    }
+
+    /// A rich table output — a simple grid, header row tinted.
+    private func drawCellTable(_ data: Data, in rect: CGRect, in ctx: CGContext) {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) else { return }
+        var rows: [[String]] = []
+        if let arr = obj as? [[Any]] {
+            rows = arr.map { $0.map { "\($0)" } }
+        } else if let dicts = obj as? [[String: Any]], let first = dicts.first {
+            let keys = Array(first.keys)
+            rows = [keys] + dicts.map { d in keys.map { "\(d[$0] ?? "")" } }
+        }
+        guard let cols = rows.map(\.count).max(), cols > 0 else { return }
+        let colW = rect.width / CGFloat(cols)
+        let rowH: CGFloat = 16
+        let maxRows = min(rows.count, max(1, Int(rect.height / rowH)))
+        for ri in 0..<maxRows {
+            let y = rect.minY + CGFloat(ri) * rowH
+            for ci in 0..<min(rows[ri].count, cols) {
+                let color = ri == 0 ? NSColor(hex: 0xbfc7ff) : NSColor(hex: 0xd0d0e0)
+                drawMono(rows[ri][ci], in: CGRect(x: rect.minX + CGFloat(ci) * colW + 2, y: y,
+                                                  width: colW - 4, height: rowH),
+                         size: 10.5, color: color, in: ctx)
+            }
+        }
+        ctx.setStrokeColor(NSColor(hex: 0x44445e).cgColor); ctx.setLineWidth(1)
+        ctx.move(to: CGPoint(x: rect.minX, y: rect.minY + rowH))
+        ctx.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + rowH)); ctx.strokePath()
     }
 
     /// One clipped monospaced line.
