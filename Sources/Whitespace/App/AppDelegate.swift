@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: DesktopWindow!
     private var canvas: CanvasView!
     private var menuBar: MenuBarController!
-    private var palette: PaletteWindow!
+    private var topToolbar: TopToolbarWindow!   // centered top: tools row
+    private var inspector: InspectorWindow!     // left: tabs, gear, style controls
     private let controller = CanvasController()
     private var scene: Scene!
     private var paletteHidden = false
@@ -50,7 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = canvas
         window.orderFront(nil)
 
-        palette = PaletteWindow(controller: controller)
+        topToolbar = TopToolbarWindow(controller: controller)
+        inspector = InspectorWindow(controller: controller)
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
@@ -158,9 +160,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.setEditing(editing)
         if editing {
             window.makeFirstResponder(canvas)
-            if !paletteHidden { palette.show() }
+            if !paletteHidden { showChrome() }
         } else {
-            palette.hide()
+            hideChrome()
             saveNow()
             // Optionally hide the whole canvas (clean desktop) instead of leaving
             // the drawings on the wallpaper.
@@ -168,11 +170,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Hide/show just the tool palette while staying in drawing mode (⌥⌘Q).
+    /// Show/hide both chrome panels (top toolbar + left inspector) together.
+    private func showChrome() { topToolbar.show(); inspector.show() }
+    private func hideChrome() { topToolbar.hide(); inspector.hide() }
+
+    /// Hide/show the whole tool palette (both panels) while staying in drawing
+    /// mode (⌥⌘Q).
     private func togglePalette() {
         guard window.isEditing else { return }
         paletteHidden.toggle()
-        paletteHidden ? palette.hide() : palette.show()
+        paletteHidden ? hideChrome() : showChrome()
         menuBar.setPaletteHidden(paletteHidden)
     }
 
