@@ -1456,10 +1456,10 @@ final class CanvasView: NSView {
         let cmd = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
-        // "/" opens the file-link search; "?" (⇧/) opens the shortcuts cheat sheet.
-        if event.charactersIgnoringModifiers == "/" {
-            shift ? controller.openShortcutsAction?() : onSlashSearch?(); return
-        }
+        // "?" opens the shortcuts window; "/" opens the file-link search.
+        // (charactersIgnoringModifiers keeps Shift, so ⇧/ reads as "?", not "/".)
+        if event.charactersIgnoringModifiers == "?" { controller.openShortcutsAction?(); return }
+        if event.charactersIgnoringModifiers == "/" { onSlashSearch?(); return }
         // ⇧1 fits the whole board to the view.
         if shift, event.keyCode == 18 { zoomToFit(); return }
         if cmd, let ch = event.charactersIgnoringModifiers {
