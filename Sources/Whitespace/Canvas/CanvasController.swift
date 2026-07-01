@@ -22,6 +22,7 @@ final class CanvasController: ObservableObject {
     var linkURLAction: (() -> Void)?
     var insertImageAction: (() -> Void)?
     var insertCellAction: ((String) -> Void)?
+    var insertTestCellAction: (() -> Void)?
     var runGraphAction: (() -> Void)?
     var restartKernelsAction: (() -> Void)?     // drop persistent sessions → fresh state
     var clearBoardAction: (() -> Void)?

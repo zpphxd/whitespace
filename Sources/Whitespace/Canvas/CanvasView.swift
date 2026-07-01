@@ -1689,6 +1689,23 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// A test cell: passes if it runs without raising; the header shows PASS/FAIL.
+    /// Wire an upstream cell into it and assert on `IN`.
+    func insertTestCell() {
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "cell", x: center.x - 210, y: center.y - 80, width: 420, height: 160)
+        e.cellLanguage = "python"
+        e.cellKind = "test"
+        e.text = "# Passes unless an assert fails. `IN` = upstream output.\nassert 1 + 1 == 2, \"math is broken\"\nprint(\"ok\")"
+        e.backgroundColor = "transparent"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// The scene-space hit area for a cell's run glyph (header, top-right).
     private func cellRunHitRect(_ e: Element) -> CGRect {
         let r = e.rect

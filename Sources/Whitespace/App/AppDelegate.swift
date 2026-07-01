@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.linkURLAction = { [weak self] in self?.linkURL() }
         controller.insertImageAction = { [weak self] in self?.insertImage() }
         controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
+        controller.insertTestCellAction = { [weak self] in self?.canvas.insertTestCell() }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }

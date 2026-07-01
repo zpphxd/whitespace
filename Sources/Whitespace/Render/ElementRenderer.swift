@@ -279,6 +279,18 @@ final class ElementRenderer {
         let header = e.cellExecCount.map { "\(lang)   [\($0)]" } ?? lang
         drawMono(header, in: CGRect(x: r.minX + 12, y: r.minY + 6, width: r.width - 60, height: 16),
                  size: 11, color: NSColor(hex: 0x9aa0b4), in: ctx)
+        // Test cells show a PASS / FAIL / TEST badge.
+        if e.cellKind == "test" {
+            let label: String, col: NSColor
+            if e.cellExecCount == nil { label = "TEST"; col = NSColor(hex: 0x9aa0b4) }
+            else if e.cellFailed == true { label = "FAIL"; col = NSColor(hex: 0xe03131) }
+            else { label = "PASS"; col = NSColor(hex: 0x40c057) }
+            let pill = CGRect(x: r.maxX - 96, y: r.minY + 6, width: 52, height: 15)
+            ctx.addPath(CGPath(roundedRect: pill, cornerWidth: 4, cornerHeight: 4, transform: nil))
+            ctx.setFillColor(col.withAlphaComponent(0.18).cgColor); ctx.fillPath()
+            drawMono(label, in: pill.insetBy(dx: 8, dy: 1), size: 10, color: col, in: ctx)
+        }
+
         // Run glyph (green triangle) at the right of the header.
         let tri = CGRect(x: r.maxX - 26, y: r.minY + 8, width: 11, height: 11)
         ctx.beginPath()

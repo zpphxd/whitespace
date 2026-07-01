@@ -72,6 +72,7 @@ struct Element: Codable, Identifiable, Equatable {
     var cellFailed: Bool?     // last run raised / exited non-zero
     var cellOutputType: String?   // rich output: "image/png" | "table" | "text/html"
     var cellOutputData: String?   // base64 (image) / JSON (table) / raw (html)
+    var cellKind: String?         // "test" → pass/fail assertion cell (nil = code)
 
     struct Roundness: Codable, Equatable {
         var type: Int
@@ -132,7 +133,8 @@ struct Element: Codable, Identifiable, Equatable {
         cellExecCount: Int? = nil,
         cellFailed: Bool? = nil,
         cellOutputType: String? = nil,
-        cellOutputData: String? = nil
+        cellOutputData: String? = nil,
+        cellKind: String? = nil
     ) {
         self.id = id; self.type = type
         self.x = x; self.y = y; self.width = width; self.height = height; self.angle = angle
@@ -155,6 +157,7 @@ struct Element: Codable, Identifiable, Equatable {
         self.cellLanguage = cellLanguage; self.cellOutput = cellOutput
         self.cellExecCount = cellExecCount; self.cellFailed = cellFailed
         self.cellOutputType = cellOutputType; self.cellOutputData = cellOutputData
+        self.cellKind = cellKind
     }
 
     // Lenient decoding: tolerate any subset of keys (files from other tools vary).
@@ -211,5 +214,6 @@ struct Element: Codable, Identifiable, Equatable {
         cellFailed = try? c.decodeIfPresent(Bool.self, forKey: .cellFailed)
         cellOutputType = try? c.decodeIfPresent(String.self, forKey: .cellOutputType)
         cellOutputData = try? c.decodeIfPresent(String.self, forKey: .cellOutputData)
+        cellKind = try? c.decodeIfPresent(String.self, forKey: .cellKind)
     }
 }
