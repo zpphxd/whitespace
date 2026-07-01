@@ -99,7 +99,7 @@ final class MenuBarController {
         let board = NSMenuItem(title: "Board Appearance", action: nil, keyEquivalent: "")
         let sub = NSMenu()
 
-        let editHeader = NSMenuItem(title: "When editing:", action: nil, keyEquivalent: "")
+        let editHeader = NSMenuItem(title: "White Board Transparency:", action: nil, keyEquivalent: "")
         editHeader.isEnabled = false
         sub.addItem(editHeader)
         for (title, value) in [("Light wash", 0.85), ("Solid white", 1.0), ("Transparent", 0.0)] {

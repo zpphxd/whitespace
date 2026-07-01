@@ -104,7 +104,7 @@ struct ToolPaletteView: View {
 
     private var gearMenu: some View {
         Menu {
-            Picker("When editing", selection: Binding(
+            Picker("White Board Transparency Settings", selection: Binding(
                 get: { Double(Settings.editBoardOpacity) },
                 set: { controller.setEditOpacity?(CGFloat($0)) })) {
                 Text("Light wash").tag(0.85)
