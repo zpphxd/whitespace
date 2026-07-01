@@ -1706,6 +1706,22 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// An AI cell: the text is the prompt, upstream output becomes context.
+    /// Wire several together and Run Graph for a multi-agent pipeline.
+    func insertLLMCell() {
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var e = makeElement(type: "cell", x: center.x - 210, y: center.y - 90, width: 420, height: 180)
+        e.cellLanguage = "llm"
+        e.text = "You are a data analyst. Summarize the upstream data (IN) in 3 bullets."
+        e.backgroundColor = "transparent"
+        scene.add(e)
+        scene.selection = [e.id]
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// The scene-space hit area for a cell's run glyph (header, top-right).
     private func cellRunHitRect(_ e: Element) -> CGRect {
         let r = e.rect
@@ -1717,6 +1733,17 @@ final class CanvasView: NSView {
         if let id = scene.selection.first(where: { scene.element($0)?.type == "cell" }) { runCell(id) }
     }
 
+    /// Route a cell to its engine: LLM cells hit Claude, everything else runs in
+    /// its persistent kernel. Both get upstream output as context / `IN`.
+    private func runEngine(language: String, code: String, input: String,
+                           completion: @escaping @Sendable (KernelResult) -> Void) {
+        if language == "llm" {
+            LLMRunner.run(prompt: code, context: input, completion: completion)
+        } else {
+            Kernels.shared.run(language: language, code: code, input: input, completion: completion)
+        }
+    }
+
     /// Run one cell, piping its upstream cells' current output into its stdin.
     private func runCell(_ id: String) {
         guard let e = scene.element(id), e.type == "cell" else { return }
@@ -1726,7 +1753,7 @@ final class CanvasView: NSView {
         runningCells.insert(id)
         scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        Kernels.shared.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
+        runEngine(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.execCounter += 1
@@ -1811,7 +1838,7 @@ final class CanvasView: NSView {
         ups.forEach { pulsePipe(from: $0, to: id) }
         scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        Kernels.shared.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
+        runEngine(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.execCounter += 1

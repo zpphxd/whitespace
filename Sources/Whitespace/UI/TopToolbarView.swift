@@ -53,6 +53,7 @@ struct TopToolbarView: View {
                 Button("JavaScript") { controller.insertCellAction?("javascript") }
                 Button("Ruby") { controller.insertCellAction?("ruby") }
                 Button("Test Cell") { controller.insertTestCellAction?() }
+                Button("AI Cell") { controller.insertLLMCellAction?() }
                 Divider()
                 Button("Run Graph (⌘⇧↵)") { controller.runGraphAction?() }
                 Button("Restart Kernels") { controller.restartKernelsAction?() }

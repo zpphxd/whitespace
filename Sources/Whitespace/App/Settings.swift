@@ -7,6 +7,12 @@ import Carbon.HIToolbox
 enum Settings {
     private static var defaults: UserDefaults { .standard }
 
+    /// Anthropic API key for LLM/agent cells (user-entered, stored locally).
+    static var anthropicKey: String? {
+        get { defaults.string(forKey: "anthropicKey") }
+        set { defaults.set(newValue, forKey: "anthropicKey") }
+    }
+
     private enum Key {
         static let idleOpacity = "idleBoardOpacity"
         static let editOpacity = "editBoardOpacity"

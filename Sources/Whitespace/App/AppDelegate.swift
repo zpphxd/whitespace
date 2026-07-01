@@ -66,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.insertImageAction = { [weak self] in self?.insertImage() }
         controller.insertCellAction = { [weak self] lang in self?.canvas.insertCell(language: lang) }
         controller.insertTestCellAction = { [weak self] in self?.canvas.insertTestCell() }
+        controller.insertLLMCellAction = { [weak self] in self?.canvas.insertLLMCell() }
+        controller.setApiKeyAction = { [weak self] in self?.setApiKey() }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
@@ -475,6 +477,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !url.isEmpty else { return }
             let name = URL(string: url)?.host ?? url
             canvas.addLink(link: url, name: name)
+        }
+    }
+
+    /// Prompt for the Anthropic API key used by AI cells (stored locally).
+    private func setApiKey() {
+        let alert = NSAlert()
+        alert.messageText = "Anthropic API Key"
+        alert.informativeText = "Used by AI cells. Stored locally on this Mac (UserDefaults)."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let tf = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        tf.stringValue = Settings.anthropicKey ?? ""
+        tf.placeholderString = "sk-ant-…"
+        alert.accessoryView = tf
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = tf
+        if alert.runModal() == .alertFirstButtonReturn {
+            Settings.anthropicKey = tf.stringValue.trimmingCharacters(in: .whitespaces)
         }
     }
 
