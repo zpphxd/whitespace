@@ -14,6 +14,7 @@ final class MenuBarController {
     private var togglePalette: (() -> Void)?
     private var exportPNG: (() -> Void)?
     private var exportSVG: (() -> Void)?
+    private var exportHTML: (() -> Void)?
     private var linkFile: (() -> Void)?
     private var setLinkColor: ((String) -> Void)?
     private var openFile: (() -> Void)?
@@ -26,6 +27,7 @@ final class MenuBarController {
          onTogglePalette: @escaping () -> Void,
          onExportPNG: @escaping () -> Void,
          onExportSVG: @escaping () -> Void,
+         onExportHTML: @escaping () -> Void,
          onLinkFile: @escaping () -> Void,
          onSetLinkColor: @escaping (String) -> Void,
          onOpenFile: @escaping () -> Void) {
@@ -36,6 +38,7 @@ final class MenuBarController {
         self.togglePalette = onTogglePalette
         self.exportPNG = onExportPNG
         self.exportSVG = onExportSVG
+        self.exportHTML = onExportHTML
         self.linkFile = onLinkFile
         self.setLinkColor = onSetLinkColor
         self.openFile = onOpenFile
@@ -87,6 +90,9 @@ final class MenuBarController {
         let exportSVGItem = NSMenuItem(title: "Export as SVG…", action: #selector(exportSVGItemAction), keyEquivalent: "")
         exportSVGItem.target = self
         menu.addItem(exportSVGItem)
+        let exportHTMLItem = NSMenuItem(title: "Export as HTML…", action: #selector(exportHTMLItemAction), keyEquivalent: "")
+        exportHTMLItem.target = self
+        menu.addItem(exportHTMLItem)
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Whitespace", action: nil, keyEquivalent: "q")
@@ -176,6 +182,7 @@ final class MenuBarController {
     @objc private func togglePaletteItem() { togglePalette?() }
     @objc private func exportPNGItemAction() { exportPNG?() }
     @objc private func exportSVGItemAction() { exportSVG?() }
+    @objc private func exportHTMLItemAction() { exportHTML?() }
     @objc private func linkFileAction() { linkFile?() }
     @objc private func openFileAction() { openFile?() }
     @objc private func toggleEdit() { onToggleEdit() }

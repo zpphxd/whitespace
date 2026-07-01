@@ -90,6 +90,7 @@ struct ToolPaletteView: View {
                             Button("Rename") { renameText = name; editingTab = i }
                             Button("Export as PNG…") { controller.exportTab?(i, "png") }
                             Button("Export as SVG…") { controller.exportTab?(i, "svg") }
+                            Button("Export as HTML…") { controller.exportTab?(i, "html") }
                             if controller.tabs.count > 1 {
                                 Button("Delete", role: .destructive) { controller.closeTab?(i) }
                             }

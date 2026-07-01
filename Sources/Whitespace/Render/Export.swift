@@ -58,6 +58,112 @@ enum Export {
         return out
     }
 
+    // MARK: HTML (visual SVG + agent-readable data layer)
+
+    /// A self-contained HTML export: the SVG visual on top, and behind it a
+    /// machine-readable layer — a semantic node/edge graph + the raw scene in
+    /// `<script type="application/json">`, plus a transparent, selectable overlay
+    /// of the text and links so screen readers and agents can read the board.
+    static func html(_ elements: [Element], title: String) -> String? {
+        guard let bounds = contentBounds(elements), let svg = svg(elements) else { return nil }
+        let f = bounds.insetBy(dx: -pad, dy: -pad)
+        let live = elements.filter { !$0.isDeleted }
+
+        let data = jsonSafe(semanticJSON(live, title: title, frame: f))
+        let scene = jsonSafe(sceneJSON(live))
+
+        var overlay = ""
+        for e in live {
+            let left = num(e.x - f.minX), top = num(e.y - f.minY)
+            if e.type == "text", let t = e.text, !t.isEmpty {
+                let size = e.fontSize ?? 20
+                let html = t.htmlEscaped.replacingOccurrences(of: "\n", with: "<br>")
+                overlay += "  <div class=\"ws-t\" data-ws-id=\"\(e.id)\" style=\"left:\(left)px;top:\(top)px;font-size:\(num(size))px\">\(html)</div>\n"
+            }
+            if let link = e.link, link.contains("://") {
+                let label = (e.text ?? link).htmlEscaped
+                overlay += "  <a class=\"ws-l\" href=\"\(link.htmlAttrEscaped)\" data-ws-id=\"\(e.id)\" style=\"left:\(left)px;top:\(top)px\">\(label)</a>\n"
+            }
+        }
+
+        return """
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <title>\(title.htmlEscaped)</title>
+        <meta name="generator" content="Whitespace">
+        <!-- Machine-readable board: a semantic node/edge graph for agents/LLMs. -->
+        <script type="application/json" id="whitespace-data">\(data)</script>
+        <!-- Raw scene (Excalidraw-compatible) for lossless re-import. -->
+        <script type="application/json" id="whitespace-scene">\(scene)</script>
+        <style>
+        html,body{margin:0;background:#fff}
+        .ws-board{position:relative;width:\(num(f.width))px;height:\(num(f.height))px}
+        .ws-board svg{position:absolute;inset:0}
+        .ws-semantic{position:absolute;inset:0}
+        .ws-semantic .ws-t{position:absolute;color:transparent;white-space:pre;line-height:1.25;pointer-events:none}
+        .ws-semantic .ws-l{position:absolute;color:transparent}
+        </style>
+        </head>
+        <body>
+        <main class="ws-board">
+        \(svg)<div class="ws-semantic" aria-label="Board content">
+        \(overlay)</div>
+        </main>
+        </body>
+        </html>
+        """
+    }
+
+    /// The primary agent-readable model: nodes (shapes + their text/link) and
+    /// edges (arrows/lines, using their shape bindings) — a real graph.
+    private static func semanticJSON(_ els: [Element], title: String, frame: CGRect) -> String {
+        let nodeTypes: Set<String> = ["rectangle", "ellipse", "diamond", "text", "image", "file", "frame", "cell"]
+        var nodes: [[String: Any]] = []
+        var edges: [[String: Any]] = []
+        for e in els {
+            if e.type == "arrow" || e.type == "line" {
+                var edge: [String: Any] = ["id": e.id, "type": e.type]
+                if let s = e.startBindingId { edge["from"] = s }
+                if let t = e.endBindingId { edge["to"] = t }
+                edges.append(edge)
+            } else if nodeTypes.contains(e.type) {
+                var node: [String: Any] = ["id": e.id, "type": e.type,
+                    "x": e.x.rounded(), "y": e.y.rounded(),
+                    "width": e.width.rounded(), "height": e.height.rounded()]
+                if let t = e.text, !t.isEmpty { node["text"] = t }
+                if let l = e.link { node["link"] = l }
+                if let g = e.groupIds.last { node["group"] = g }
+                nodes.append(node)
+            }
+        }
+        let model: [String: Any] = [
+            "type": "whitespace-board",
+            "title": title,
+            "bounds": ["x": frame.minX.rounded(), "y": frame.minY.rounded(),
+                       "width": frame.width.rounded(), "height": frame.height.rounded()],
+            "nodes": nodes,
+            "edges": edges,
+            "texts": els.compactMap { $0.text }.filter { !$0.isEmpty },
+        ]
+        guard let d = try? JSONSerialization.data(withJSONObject: model, options: [.prettyPrinted, .sortedKeys]),
+              let s = String(data: d, encoding: .utf8) else { return "{}" }
+        return s
+    }
+
+    private static func sceneJSON(_ els: [Element]) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.withoutEscapingSlashes]
+        guard let d = try? enc.encode(els), let s = String(data: d, encoding: .utf8) else { return "[]" }
+        return s
+    }
+
+    /// Prevent an embedded `</script>` in text from closing the script tag early.
+    private static func jsonSafe(_ s: String) -> String {
+        s.replacingOccurrences(of: "</", with: "<\\/")
+    }
+
     private static func svgElement(_ e: Element) -> String {
         let stroke = e.strokeColor
         let opacity = e.opacity / 100
@@ -162,5 +268,9 @@ private extension String {
         replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    var htmlAttrEscaped: String {
+        htmlEscaped.replacingOccurrences(of: "\"", with: "&quot;")
     }
 }

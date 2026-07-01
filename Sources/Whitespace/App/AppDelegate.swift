@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTogglePalette: { [weak self] in self?.togglePalette() },
             onExportPNG: { [weak self] in self?.export(.png) },
             onExportSVG: { [weak self] in self?.export(.svg) },
+            onExportHTML: { [weak self] in self?.export(.html) },
             onLinkFile: { [weak self] in self?.linkFile() },
             onSetLinkColor: { [weak self] _ in self?.canvas.needsDisplay = true },
             onOpenFile: { [weak self] in self?.openExcalidrawFile() }
@@ -260,13 +261,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal(); return
         }
         let panel = NSSavePanel()
-        let isPNG = kind == "png"
-        panel.nameFieldStringValue = "\(boards[index].name).\(isPNG ? "png" : "svg")"
-        panel.allowedContentTypes = [isPNG ? .png : .svg]
+        let name = boards[index].name
+        panel.nameFieldStringValue = "\(name).\(kind)"
+        panel.allowedContentTypes = [kind == "png" ? .png : kind == "html" ? .html : .svg]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        if isPNG { try? Export.png(elements)?.write(to: url, options: .atomic) }
-        else { try? Export.svg(elements)?.write(to: url, atomically: true, encoding: .utf8) }
+        switch kind {
+        case "png": try? Export.png(elements)?.write(to: url, options: .atomic)
+        case "html": try? Export.html(elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
+        default: try? Export.svg(elements)?.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 
     private func renameBoard(_ index: Int, _ name: String) {
@@ -288,7 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         saveNow()
     }
 
-    private enum ExportKind { case png, svg }
+    private enum ExportKind { case png, svg, html }
 
     private func export(_ kind: ExportKind) {
         guard Export.contentBounds(scene.elements) != nil else {
@@ -298,9 +302,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.runModal()
             return
         }
+        let name = boards.indices.contains(currentBoard) ? boards[currentBoard].name : "whiteboard"
+        let ext = kind == .png ? "png" : kind == .html ? "html" : "svg"
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = kind == .png ? "whiteboard.png" : "whiteboard.svg"
-        panel.allowedContentTypes = [kind == .png ? .png : .svg]
+        panel.nameFieldStringValue = "\(name).\(ext)"
+        panel.allowedContentTypes = [kind == .png ? .png : kind == .html ? .html : .svg]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         switch kind {
@@ -308,6 +314,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? Export.png(scene.elements)?.write(to: url, options: .atomic)
         case .svg:
             try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
+        case .html:
+            try? Export.html(scene.elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
         }
     }
 
