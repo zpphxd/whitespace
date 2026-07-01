@@ -618,10 +618,7 @@ final class CanvasView: NSView {
                 if index == 0 || index == count - 1 {
                     let isStart = index == 0
                     let pt = isStart ? arrow.absolutePoints.first : arrow.absolutePoints.last
-                    let shape = pt.flatMap { topShape(at: $0, excluding: id, tolerance: 20) }
-                    scene.update(id: id) { e in
-                        if isStart { e.startBindingId = shape?.id } else { e.endBindingId = shape?.id }
-                    }
+                    if let pt { bindEndpoint(id, isStart: isStart, at: pt) }
                     rebuildArrow(id)
                 }
             }
@@ -798,12 +795,8 @@ final class CanvasView: NSView {
         guard let start = abs.first, let end = abs.last else { return }
         if hypot(end.x - start.x, end.y - start.y) < 4 { scene.remove(id: id); return }
         // Generous binding radius so dropping NEAR a shape links it.
-        let startShape = topShape(at: start, excluding: id, tolerance: 20)
-        let endShape = topShape(at: end, excluding: id, tolerance: 20)
-        scene.update(id: id) { el in
-            el.startBindingId = startShape?.id
-            el.endBindingId = endShape?.id
-        }
+        bindEndpoint(id, isStart: true, at: start)
+        bindEndpoint(id, isStart: false, at: end)
         rebuildArrow(id)
         scene.selection = [id]
         controller.tool = .select   // revert to the pointer after placing
@@ -818,6 +811,20 @@ final class CanvasView: NSView {
             if e.hitTest(p, tolerance: tolerance) { return e }
         }
         return nil
+    }
+
+    /// Bind one end of an arrow to whatever shape sits under `absPoint`, recording
+    /// the welded fixedPoint (or clearing the binding when there's no shape).
+    private func bindEndpoint(_ arrowId: String, isStart: Bool, at absPoint: CGPoint) {
+        let shape = topShape(at: absPoint, excluding: arrowId, tolerance: 20)
+        let fixed = shape.map { ArrowBinding.fixedPoint(of: $0, at: absPoint) }
+        scene.update(id: arrowId) { e in
+            if isStart {
+                e.startBindingId = shape?.id; e.startBindingPoint = fixed
+            } else {
+                e.endBindingId = shape?.id; e.endBindingPoint = fixed
+            }
+        }
     }
 
     /// Set a linear element's points from absolute scene coordinates, keeping the
@@ -838,14 +845,23 @@ final class CanvasView: NSView {
         guard pts.count >= 2 else { return }
         let startShape = arrow.startBindingId.flatMap { scene.element($0) }
         let endShape = arrow.endBindingId.flatMap { scene.element($0) }
+        // Prefer the welded fixedPoint anchor; fall back to the center-ray edge.
+        func startAttach(_ s: Element, toward: CGPoint) -> CGPoint {
+            arrow.startBindingPoint.map { ArrowBinding.anchorPoint(of: s, fixed: $0) }
+                ?? ArrowBinding.edgePoint(of: s, toward: toward)
+        }
+        func endAttach(_ e: Element, toward: CGPoint) -> CGPoint {
+            arrow.endBindingPoint.map { ArrowBinding.anchorPoint(of: e, fixed: $0) }
+                ?? ArrowBinding.edgePoint(of: e, toward: toward)
+        }
 
         if arrow.elbowed {
             // Auto-routed: rebuild the whole dogleg between the two shape edges.
             var a = pts.first!, b = pts.last!
             let bCenter = endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? b
             let aCenter = startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? a
-            if let s = startShape { a = ArrowBinding.edgePoint(of: s, toward: bCenter) }
-            if let e = endShape { b = ArrowBinding.edgePoint(of: e, toward: aCenter) }
+            if let s = startShape { a = startAttach(s, toward: bCenter) }
+            if let e = endShape { b = endAttach(e, toward: aCenter) }
             setAbsolutePoints(id, ArrowBinding.elbowRoute(a, b))
         } else {
             // Move only the bound endpoints; aim each at its interior neighbor so
@@ -854,8 +870,8 @@ final class CanvasView: NSView {
                 : endShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? pts.last!
             let endTarget = pts.count > 2 ? pts[pts.count - 2]
                 : startShape.map { CGPoint(x: $0.boundingRect.midX, y: $0.boundingRect.midY) } ?? pts.first!
-            if let s = startShape { pts[0] = ArrowBinding.edgePoint(of: s, toward: startTarget) }
-            if let e = endShape { pts[pts.count - 1] = ArrowBinding.edgePoint(of: e, toward: endTarget) }
+            if let s = startShape { pts[0] = startAttach(s, toward: startTarget) }
+            if let e = endShape { pts[pts.count - 1] = endAttach(e, toward: endTarget) }
             setAbsolutePoints(id, pts)
         }
         renderer.invalidate(id)
@@ -905,12 +921,8 @@ final class CanvasView: NSView {
         if pts.count >= 2 { pts.removeLast() }   // drop preview
         guard pts.count >= 2 else { scene.remove(id: id); needsDisplay = true; return }
         setAbsolutePoints(id, pts)
-        let startShape = topShape(at: pts.first!, excluding: id, tolerance: 20)
-        let endShape = topShape(at: pts.last!, excluding: id, tolerance: 20)
-        scene.update(id: id) { el in
-            el.startBindingId = startShape?.id
-            el.endBindingId = endShape?.id
-        }
+        bindEndpoint(id, isStart: true, at: pts.first!)
+        bindEndpoint(id, isStart: false, at: pts.last!)
         rebuildArrow(id)
         scene.selection = [id]
         controller.tool = .select   // revert to the pointer after placing
@@ -1306,6 +1318,7 @@ final class CanvasView: NSView {
                 e.x += 20; e.y += 20
                 e.version = 1
                 e.startBindingId = nil; e.endBindingId = nil // copies aren't linked
+                e.startBindingPoint = nil; e.endBindingPoint = nil
                 scene.add(e)
                 newIds.append(e.id)
             }
