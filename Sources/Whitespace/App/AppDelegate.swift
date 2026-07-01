@@ -184,7 +184,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Show/hide both chrome panels (top toolbar + left inspector) together.
     private func showChrome() { topToolbar.show(); inspector.show() }
-    private func hideChrome() { topToolbar.hide(); inspector.hide() }
+    private func hideChrome() {
+        topToolbar.hide(); inspector.hide()
+        cheatSheet.hide(); searchWindow?.close()   // transient overlays go with the chrome
+    }
 
     /// Hide/show the whole tool palette (both panels) while staying in drawing
     /// mode (⌥⌘Q).

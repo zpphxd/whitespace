@@ -48,6 +48,19 @@ struct TopToolbarView: View {
             .help("Link a file, folder, or URL")
 
             Menu {
+                Button("Shell") { controller.insertCellAction?("shell") }
+                Button("Python") { controller.insertCellAction?("python") }
+                Button("JavaScript") { controller.insertCellAction?("javascript") }
+                Button("Ruby") { controller.insertCellAction?("ruby") }
+            } label: {
+                Image(systemName: "terminal").frame(width: 30, height: 32)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Insert a code cell")
+
+            Menu {
                 Button { controller.tool = .frame } label: { Label(Tool.frame.label, systemImage: Tool.frame.symbol) }
                 Button { controller.tool = .laser } label: { Label(Tool.laser.label, systemImage: Tool.laser.symbol) }
                 Button { controller.tool = .lasso } label: { Label(Tool.lasso.label, systemImage: Tool.lasso.symbol) }

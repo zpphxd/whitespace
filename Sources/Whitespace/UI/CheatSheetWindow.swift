@@ -57,10 +57,13 @@ struct CheatSheetView: View {
         ("⌘K", "Link a URL"), ("/", "Link a file"),
         ("paste data", "Chart wheel"), ("right-click link", "→ QR code"),
     ]
-    private let app: [Row] = [
-        ("⌘F", "Search boards"), ("⌥⌘W", "Toggle edit mode"),
-        ("⌥⌘Q", "Toggle panels"), ("?", "This cheat sheet"),
-    ]
+    // The edit / panel toggles reflect whatever they're currently bound to.
+    private var app: [Row] {
+        [("⌘F", "Search boards"),
+         (Shortcut.display(keyCode: Settings.editKeyCode, mods: Settings.editMods), "Toggle edit mode"),
+         (Shortcut.display(keyCode: Settings.paletteKeyCode, mods: Settings.paletteMods), "Toggle panels"),
+         ("?", "This cheat sheet")]
+    }
     private let cells: [Row] = [
         ("⌘↩", "Run cell"), ("⇧⌘↩", "Run graph"),
     ]
@@ -95,6 +98,9 @@ struct CheatSheetView: View {
                 VStack(alignment: .leading, spacing: 18) { section("Edit", edit) }
                 VStack(alignment: .leading, spacing: 18) { section("View", view); section("Create", create); section("App", app) }
             }
+            Text("Edit & panel toggles are configurable — gear ▸ Configure Hotkeys.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
         }
         .padding(28)
         .frame(width: 740)
