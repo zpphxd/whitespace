@@ -2,6 +2,7 @@ import AppKit
 
 /// Status-bar item: the always-available control surface for the desktop
 /// canvas. Toggling Edit Mode is the primary action (also bound to a hotkey).
+@MainActor
 final class MenuBarController {
 
     private let statusItem: NSStatusItem

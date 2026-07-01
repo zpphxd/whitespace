@@ -983,12 +983,19 @@ final class CanvasView: NSView {
         }
     }
 
-    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
-    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
-        panel.dataSource = self
-        panel.delegate = self
+    // These NSResponder overrides are delivered as nonisolated by the SDK, but
+    // always run on the main thread — hop onto the main actor to touch the panel
+    // and our state (an error under Swift 6.0, a warning under 6.3).
+    override nonisolated func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+    override nonisolated func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = self
+            panel.delegate = self
+        }
     }
-    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) { quickLookURL = nil }
+    override nonisolated func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { quickLookURL = nil }
+    }
 
     private var contextPath: String?
 
