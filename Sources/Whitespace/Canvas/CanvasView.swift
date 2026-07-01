@@ -1407,6 +1407,11 @@ final class CanvasView: NSView {
         e.strokeColor = controller.style.strokeColor
         e.width = Double(width) + 8
         e.height = size * 1.25 * Double(lines.count)
+        // A pasted bare URL becomes a clickable link (matches typing one).
+        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("://"), !trimmed.contains(" "), !trimmed.contains("\n") {
+            e.link = trimmed
+        }
         scene.add(e)
         scene.selection = [e.id]
         updateSelectionState()
