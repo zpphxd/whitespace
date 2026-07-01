@@ -1706,6 +1706,17 @@ final class CanvasView: NSView {
         needsDisplay = true
     }
 
+    /// Drop imported notebook cells onto the board and select them.
+    func addImportedCells(_ cells: [Element]) {
+        guard !cells.isEmpty else { return }
+        scene.beginEdit()
+        for e in cells { scene.add(e) }
+        scene.selection = Set(cells.map(\.id))
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     /// An AI cell: the text is the prompt, upstream output becomes context.
     /// Wire several together and Run Graph for a multi-agent pipeline.
     func insertLLMCell() {

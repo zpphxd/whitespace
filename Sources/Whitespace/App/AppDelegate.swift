@@ -68,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.insertTestCellAction = { [weak self] in self?.canvas.insertTestCell() }
         controller.insertLLMCellAction = { [weak self] in self?.canvas.insertLLMCell() }
         controller.setApiKeyAction = { [weak self] in self?.setApiKey() }
+        controller.exportNotebookAction = { [weak self] in self?.export(.ipynb) }
+        controller.openNotebookAction = { [weak self] in self?.openNotebook() }
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
@@ -289,12 +291,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = NSSavePanel()
         let name = boards[index].name
         panel.nameFieldStringValue = "\(name).\(kind)"
-        panel.allowedContentTypes = [kind == "png" ? .png : kind == "html" ? .html : .svg]
+        panel.allowedContentTypes = [kind == "png" ? .png : kind == "html" ? .html : kind == "ipynb" ? Self.ipynbType : .svg]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         switch kind {
         case "png": try? Export.png(elements)?.write(to: url, options: .atomic)
         case "html": try? Export.html(elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
+        case "ipynb": try? Notebook.exportIPYNB(elements)?.write(to: url, options: .atomic)
         default: try? Export.svg(elements)?.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -318,7 +321,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         saveNow()
     }
 
-    private enum ExportKind { case png, svg, html }
+    private enum ExportKind { case png, svg, html, ipynb }
+
+    private static let ipynbType = UTType(filenameExtension: "ipynb") ?? .json
 
     private func export(_ kind: ExportKind) {
         guard Export.contentBounds(scene.elements) != nil else {
@@ -329,10 +334,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let name = boards.indices.contains(currentBoard) ? boards[currentBoard].name : "whiteboard"
-        let ext = kind == .png ? "png" : kind == .html ? "html" : "svg"
+        let ext: String
+        let type: UTType
+        switch kind {
+        case .png: ext = "png"; type = .png
+        case .html: ext = "html"; type = .html
+        case .ipynb: ext = "ipynb"; type = Self.ipynbType
+        case .svg: ext = "svg"; type = .svg
+        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(name).\(ext)"
-        panel.allowedContentTypes = [kind == .png ? .png : kind == .html ? .html : .svg]
+        panel.allowedContentTypes = [type]
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         switch kind {
@@ -342,7 +354,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? Export.svg(scene.elements)?.write(to: url, atomically: true, encoding: .utf8)
         case .html:
             try? Export.html(scene.elements, title: name)?.write(to: url, atomically: true, encoding: .utf8)
+        case .ipynb:
+            try? Notebook.exportIPYNB(scene.elements)?.write(to: url, options: .atomic)
         }
+    }
+
+    /// Import a `.ipynb` and lay its code cells out on the current board.
+    private func openNotebook() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [Self.ipynbType, .json]
+        panel.message = "Choose a Jupyter notebook to import"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        let cells = Notebook.importIPYNB(data, at: CGPoint(x: 80, y: 80))
+        guard !cells.isEmpty else { return }
+        canvas.addImportedCells(cells)
     }
 
     // MARK: Cross-board search

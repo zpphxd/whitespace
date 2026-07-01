@@ -25,6 +25,8 @@ final class CanvasController: ObservableObject {
     var insertTestCellAction: (() -> Void)?
     var insertLLMCellAction: (() -> Void)?
     var setApiKeyAction: (() -> Void)?
+    var exportNotebookAction: (() -> Void)?     // export cells → .ipynb
+    var openNotebookAction: (() -> Void)?       // import a .ipynb onto the canvas
     var runGraphAction: (() -> Void)?
     var restartKernelsAction: (() -> Void)?     // drop persistent sessions → fresh state
     var clearBoardAction: (() -> Void)?

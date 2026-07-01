@@ -90,6 +90,7 @@ struct InspectorView: View {
                             Button("Export as PNG…") { controller.exportTab?(i, "png") }
                             Button("Export as SVG…") { controller.exportTab?(i, "svg") }
                             Button("Export as HTML…") { controller.exportTab?(i, "html") }
+                            Button("Export as Notebook…") { controller.exportTab?(i, "ipynb") }
                             if controller.tabs.count > 1 {
                                 Button("Delete", role: .destructive) { controller.closeTab?(i) }
                             }
@@ -144,6 +145,9 @@ struct InspectorView: View {
             Button("Keyboard Shortcuts…") { controller.openShortcutsAction?() }
             Button("Configure Hotkeys…") { controller.configureHotkeysAction?() }
             Button("Set API Key…") { controller.setApiKeyAction?() }
+            Divider()
+            Button("Export as Notebook (.ipynb)…") { controller.exportNotebookAction?() }
+            Button("Open Notebook (.ipynb)…") { controller.openNotebookAction?() }
         } label: {
             Image(systemName: "gearshape").frame(width: 22, height: 22)
         }
