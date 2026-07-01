@@ -20,7 +20,7 @@ final class PaletteWindow {
 
         panel = KeyablePanel(contentViewController: host)
         panel.styleMask = [.borderless, .nonactivatingPanel]
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
