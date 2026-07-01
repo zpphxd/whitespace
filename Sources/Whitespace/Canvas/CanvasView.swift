@@ -1709,13 +1709,16 @@ final class CanvasView: NSView {
         runningCells.insert(id)
         scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        Kernels.shared.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] output, failed in
+        Kernels.shared.run(language: e.cellLanguage ?? "shell", code: e.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.execCounter += 1
                 let n = self.execCounter
                 self.runningCells.remove(id)
-                self.scene.update(id: id) { $0.cellOutput = output; $0.cellFailed = failed; $0.cellExecCount = n }
+                self.scene.update(id: id) {
+                    $0.cellOutput = result.text; $0.cellFailed = result.failed; $0.cellExecCount = n
+                    $0.cellOutputType = result.mimeType; $0.cellOutputData = result.mimeData
+                }
                 self.renderer.invalidate(id)
                 self.needsDisplay = true
                 self.onSceneChange?()
@@ -1791,13 +1794,16 @@ final class CanvasView: NSView {
         ups.forEach { pulsePipe(from: $0, to: id) }
         scene.update(id: id) { $0.cellOutput = "running…"; $0.cellFailed = nil }
         renderer.invalidate(id); needsDisplay = true
-        Kernels.shared.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] output, failed in
+        Kernels.shared.run(language: cell.cellLanguage ?? "shell", code: cell.text ?? "", input: input) { [weak self] result in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.execCounter += 1
                 let n = self.execCounter
-                self.graphOutputs[id] = output
-                self.scene.update(id: id) { $0.cellOutput = output; $0.cellFailed = failed; $0.cellExecCount = n }
+                self.graphOutputs[id] = result.text
+                self.scene.update(id: id) {
+                    $0.cellOutput = result.text; $0.cellFailed = result.failed; $0.cellExecCount = n
+                    $0.cellOutputType = result.mimeType; $0.cellOutputData = result.mimeData
+                }
                 self.renderer.invalidate(id); self.needsDisplay = true; self.onSceneChange?()
                 // Brief pause so the pulse into the next cell reads clearly.
                 Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
