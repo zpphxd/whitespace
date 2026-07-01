@@ -81,15 +81,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             on ? self.window.orderFront(nil) : self.window.orderOut(nil)   // apply now if idle
         }
 
-        // Catch "/" app-wide (works whichever of our windows is key), except
-        // while typing in a text field, so it always opens the file picker.
+        // Route canvas keyboard shortcuts (tool keys, arrows, delete, "/", …) to
+        // the canvas whichever chrome panel happens to be key — but never while
+        // typing in a text field. ⌘-combos keep the normal responder chain
+        // (performKeyEquivalent), so grouping/undo/etc. still work.
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.window.isEditing else { return event }
-            if event.charactersIgnoringModifiers == "/", !self.isTextEditing() {
-                self.linkFile()
-                return nil
-            }
-            return event
+            guard let self, self.window.isEditing, !self.isTextEditing(),
+                  !event.modifierFlags.contains(.command) else { return event }
+            self.canvas.keyDown(with: event)
+            return nil
         }
 
         controller.addTab = { [weak self] in self?.addBoard() }
