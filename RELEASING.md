@@ -36,18 +36,25 @@ git add appcast.xml && git commit -m "release v0.2" && git push
 Users on an older build get a Sparkle prompt within a day (or via **Check for
 Updates…** in the menu), download the new DMG, and it installs in place.
 
-## Notarization (recommended)
+## Notarization (required for clean downloads)
 
-Developer ID signing lets Sparkle install updates, but a *first* download from
-the web still trips Gatekeeper until the DMG is notarized. Once, create an
-app-specific password at appleid.apple.com, then per release:
+Developer ID signing alone is NOT enough for downloads: Gatekeeper shows
+“Apple could not verify Whitespace is free of malware” for any unnotarized
+app that came from the internet. `make_release.sh` notarizes + staples the DMG
+automatically **if** a notarytool keychain profile exists.
+
+Set it up once (needs an app-specific password from
+appleid.apple.com → Sign-In & Security → App-Specific Passwords):
 
 ```sh
-xcrun notarytool submit releases/Whitespace-0.2.dmg \
-  --apple-id you@example.com --team-id 3Q5YCK6M5B --password <app-specific-pw> --wait
-xcrun stapler staple releases/Whitespace-0.2.dmg
-# re-run the appcast step so the signature matches the stapled DMG, then push
+xcrun notarytool store-credentials whitespace-notary \
+  --apple-id you@example.com --team-id 3Q5YCK6M5B --password <app-specific-pw>
 ```
+
+After that every `./make_release.sh` run notarizes before generating the
+appcast (ordering matters — stapling changes the DMG, so the Sparkle signature
+is computed on the final stapled file). If the profile is missing, the script
+warns loudly and produces an unnotarized DMG.
 
 ## Notes
 

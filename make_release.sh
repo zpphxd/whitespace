@@ -22,7 +22,26 @@ export WS_VERSION WS_BUILD
 mkdir -p releases
 cp Whitespace.dmg "releases/${ASSET}"
 
-# 3. Generate/refresh the appcast (versions, sizes, download URLs), then attach
+# 3. Notarize + staple, so downloads don't hit the Gatekeeper "could not verify"
+#    wall. Uses a notarytool keychain profile — create it ONCE with:
+#      xcrun notarytool store-credentials whitespace-notary \
+#        --apple-id <your-apple-id> --team-id 3Q5YCK6M5B --password <app-specific-pw>
+#    (app-specific password: appleid.apple.com → Sign-In & Security)
+#    Must happen BEFORE the appcast step: stapling changes the DMG bytes.
+PROFILE="${NOTARY_PROFILE:-whitespace-notary}"
+if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+    echo "Notarizing ${ASSET} (takes a few minutes)…"
+    xcrun notarytool submit "releases/${ASSET}" --keychain-profile "$PROFILE" --wait
+    xcrun stapler staple "releases/${ASSET}"
+    echo "✓ notarized + stapled"
+else
+    echo "⚠️  SKIPPING NOTARIZATION — no '$PROFILE' keychain profile found."
+    echo "   Downloads of this DMG will hit Gatekeeper's 'could not verify' dialog."
+    echo "   Set it up once:  xcrun notarytool store-credentials $PROFILE \\"
+    echo "     --apple-id <your-apple-id> --team-id 3Q5YCK6M5B --password <app-specific-pw>"
+fi
+
+# 4. Generate/refresh the appcast (versions, sizes, download URLs), then attach
 #    each enclosure's EdDSA signature via sign_update. (generate_appcast's own
 #    signing can be blocked by the Keychain ACL; sign_update is reliable.)
 BIN=".build/artifacts/sparkle/Sparkle/bin"
@@ -50,7 +69,3 @@ echo "✓ release staged: releases/${ASSET} + appcast.xml"
 echo "Publish it (both steps required for users to auto-update):"
 echo "  1. gh release create ${TAG} releases/${ASSET} --repo ${REPO} --title \"Whitespace ${WS_VERSION}\" --notes \"…\""
 echo "  2. git add appcast.xml && git commit -m \"release ${TAG}\" && git push"
-echo
-echo "Optional but recommended (removes the Gatekeeper warning on first open):"
-echo "  xcrun notarytool submit releases/${ASSET} --apple-id <id> --team-id 3Q5YCK6M5B --password <app-pw> --wait"
-echo "  xcrun stapler staple releases/${ASSET}   # then re-run steps 2-3 to re-sign the appcast"
