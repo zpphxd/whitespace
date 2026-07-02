@@ -36,6 +36,7 @@ final class CanvasController: ObservableObject {
     var runGraphAction: (() -> Void)?
     var restartKernelsAction: (() -> Void)?     // drop persistent sessions → fresh state
     var clearBoardAction: (() -> Void)?
+    var saveNowAction: (() -> Void)?            // ⌘S: flush the pending autosave immediately
 
     // Settings actions (exposed via the palette gear menu).
     var setEditOpacity: ((CGFloat) -> Void)?

@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.runGraphAction = { [weak self] in self?.canvas.runGraph() }
         controller.restartKernelsAction = { Kernels.shared.restartAll() }
         controller.clearBoardAction = { [weak self] in self?.canvas.clearBoard() }
+        controller.saveNowAction = { [weak self] in self?.saveNow() }
         controller.setEditOpacity = { [weak self] v in
             Settings.editBoardOpacity = v; self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
         }
