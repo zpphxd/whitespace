@@ -16,6 +16,8 @@ enum Settings {
         static let stayOnWallpaper = "stayOnWallpaper"
         static let editKeyCode = "editKeyCode", editMods = "editMods"
         static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
+        static let saveKeyCode = "saveKeyCode", saveMods = "saveMods"
+        static let newBoardKeyCode = "newBoardKeyCode", newBoardMods = "newBoardMods"
         static let sidebarPinned = "sidebarPinned"
         static let boardPattern = "boardPattern"
         static let askedLaunchAtLogin = "askedLaunchAtLogin"
@@ -58,6 +60,26 @@ enum Settings {
     static var paletteMods: UInt32 {
         get { defaults.object(forKey: Key.paletteMods) == nil ? UInt32(cmdKey | optionKey) : UInt32(defaults.integer(forKey: Key.paletteMods)) }
         set { defaults.set(Int(newValue), forKey: Key.paletteMods) }
+    }
+
+    // In-app (edit-mode) shortcuts, rebindable in Configure Hotkeys. Defaults:
+    // ⌘S save now, ⌘T new board. These are NOT global — they only fire while
+    // the canvas has focus, so they never hijack other apps' ⌘S/⌘T.
+    static var saveKeyCode: UInt32 {
+        get { defaults.object(forKey: Key.saveKeyCode) == nil ? UInt32(kVK_ANSI_S) : UInt32(defaults.integer(forKey: Key.saveKeyCode)) }
+        set { defaults.set(Int(newValue), forKey: Key.saveKeyCode) }
+    }
+    static var saveMods: UInt32 {
+        get { defaults.object(forKey: Key.saveMods) == nil ? UInt32(cmdKey) : UInt32(defaults.integer(forKey: Key.saveMods)) }
+        set { defaults.set(Int(newValue), forKey: Key.saveMods) }
+    }
+    static var newBoardKeyCode: UInt32 {
+        get { defaults.object(forKey: Key.newBoardKeyCode) == nil ? UInt32(kVK_ANSI_T) : UInt32(defaults.integer(forKey: Key.newBoardKeyCode)) }
+        set { defaults.set(Int(newValue), forKey: Key.newBoardKeyCode) }
+    }
+    static var newBoardMods: UInt32 {
+        get { defaults.object(forKey: Key.newBoardMods) == nil ? UInt32(cmdKey) : UInt32(defaults.integer(forKey: Key.newBoardMods)) }
+        set { defaults.set(Int(newValue), forKey: Key.newBoardMods) }
     }
 
     /// Color used to render linked file/folder nodes (just "– name" text).

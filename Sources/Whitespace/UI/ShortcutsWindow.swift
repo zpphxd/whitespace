@@ -91,7 +91,7 @@ final class ShortcutsWindow {
     var onChange: (() -> Void)?
 
     init() {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 150),
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 230),
                         styleMask: [.titled, .closable, .utilityWindow],
                         backing: .buffered, defer: false)
         panel.title = "Keyboard Shortcuts"
@@ -115,10 +115,20 @@ final class ShortcutsWindow {
         palRec.onCapture = { [weak self] code, mods in
             Settings.paletteKeyCode = code; Settings.paletteMods = mods; self?.onChange?()
         }
+        let saveRec = KeyRecorder(keyCode: Settings.saveKeyCode, mods: Settings.saveMods)
+        saveRec.onCapture = { [weak self] code, mods in
+            Settings.saveKeyCode = code; Settings.saveMods = mods; self?.onChange?()
+        }
+        let newBoardRec = KeyRecorder(keyCode: Settings.newBoardKeyCode, mods: Settings.newBoardMods)
+        newBoardRec.onCapture = { [weak self] code, mods in
+            Settings.newBoardKeyCode = code; Settings.newBoardMods = mods; self?.onChange?()
+        }
 
         let stack = NSStackView(views: [
             row("Toggle whiteboard", recorder: editRec),
             row("Hide / show palette", recorder: palRec),
+            row("Save board", recorder: saveRec),
+            row("New board", recorder: newBoardRec),
         ])
         stack.orientation = .vertical
         stack.spacing = 14

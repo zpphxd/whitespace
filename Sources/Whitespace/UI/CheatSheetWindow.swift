@@ -60,7 +60,8 @@ struct CheatSheetView: View {
     // The edit / panel toggles reflect whatever they're currently bound to.
     private var app: [Row] {
         [("⌘F", "Search boards"),
-         ("⌘S", "Save now"), ("⌘T", "New board"),
+         (Shortcut.display(keyCode: Settings.saveKeyCode, mods: Settings.saveMods), "Save now"),
+         (Shortcut.display(keyCode: Settings.newBoardKeyCode, mods: Settings.newBoardMods), "New board"),
          (Shortcut.display(keyCode: Settings.editKeyCode, mods: Settings.editMods), "Toggle edit mode"),
          (Shortcut.display(keyCode: Settings.paletteKeyCode, mods: Settings.paletteMods), "Toggle panels"),
          ("?", "This cheat sheet")]

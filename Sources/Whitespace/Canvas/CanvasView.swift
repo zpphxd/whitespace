@@ -1640,9 +1640,17 @@ final class CanvasView: NSView {
                 camera.zoom(by: 1 / 1.1, around: CGPoint(x: bounds.midX, y: bounds.midY)); needsDisplay = true; return
             case "k": controller.linkURLAction?(); return
             case "f": controller.openSidebarSearchAction?(); return
-            case "s": controller.saveNowAction?(); return
-            case "t": controller.addTab?(); return
             default: break
+            }
+        }
+        // Rebindable in-app shortcuts (Configure Hotkeys): save now / new board.
+        let eventMods = Shortcut.carbonMods(event.modifierFlags)
+        if eventMods != 0 {
+            if UInt32(event.keyCode) == Settings.saveKeyCode && eventMods == Settings.saveMods {
+                controller.saveNowAction?(); return
+            }
+            if UInt32(event.keyCode) == Settings.newBoardKeyCode && eventMods == Settings.newBoardMods {
+                controller.addTab?(); return
             }
         }
         // ⌥Arrow nudges the camera around the canvas.
