@@ -16,6 +16,14 @@ enum Settings {
         static let stayOnWallpaper = "stayOnWallpaper"
         static let editKeyCode = "editKeyCode", editMods = "editMods"
         static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
+        static let sidebarPinned = "sidebarPinned"
+    }
+
+    /// When pinned, the right sidebar auto-opens on entering edit mode and stays
+    /// put; unpinned, it only appears when toggled and hides with the chrome.
+    static var sidebarPinned: Bool {
+        get { defaults.bool(forKey: Key.sidebarPinned) }
+        set { defaults.set(newValue, forKey: Key.sidebarPinned) }
     }
 
     // Global hotkeys (Carbon keyCode + modifier mask). Defaults: ⌥⌘W / ⌥⌘Q.

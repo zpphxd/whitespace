@@ -12,6 +12,9 @@ final class CanvasView: NSView {
     private let renderer = ElementRenderer()
     private var camera = Camera()
 
+    /// Element ids the sidebar search wants washed in place (the yellow highlight).
+    private var searchHighlights: Set<String> = []
+
     var isEditing = false {
         didSet {
             needsDisplay = true
@@ -211,6 +214,7 @@ final class CanvasView: NSView {
             ctx.fill(bounds)
         }
 
+        drawSearchHighlights(in: ctx)
         renderer.draw(scene: scene, camera: camera, in: ctx)
 
         drawSelection(in: ctx)
@@ -1477,7 +1481,7 @@ final class CanvasView: NSView {
             case "-":
                 camera.zoom(by: 1 / 1.1, around: CGPoint(x: bounds.midX, y: bounds.midY)); needsDisplay = true; return
             case "k": controller.linkURLAction?(); return
-            case "f": controller.openSearchAction?(); return
+            case "f": controller.openSidebarSearchAction?(); return
             default: break
             }
         }
@@ -1675,6 +1679,104 @@ final class CanvasView: NSView {
     }
 
     /// Drop a runnable cell at the view center.
+    // MARK: Search highlight + library stencils
+
+    /// Replace the set of search-highlighted elements and repaint if it changed.
+    func setSearchHighlights(_ ids: Set<String>) {
+        guard ids != searchHighlights else { return }
+        searchHighlights = ids
+        needsDisplay = true
+    }
+
+    /// Yellow wash behind every element the sidebar search matched (current board).
+    private func drawSearchHighlights(in ctx: CGContext) {
+        guard !searchHighlights.isEmpty else { return }
+        ctx.saveGState()
+        ctx.setFillColor(NSColor(hex: 0xffd43b).withAlphaComponent(0.38).cgColor)
+        for id in searchHighlights {
+            guard let e = scene.element(id) else { continue }
+            let r = e.boundingRect
+            let a = camera.sceneToView(CGPoint(x: r.minX, y: r.minY))
+            let b = camera.sceneToView(CGPoint(x: r.maxX, y: r.maxY))
+            let vr = CGRect(x: min(a.x, b.x) - 4, y: min(a.y, b.y) - 3,
+                            width: abs(b.x - a.x) + 8, height: abs(a.y - b.y) + 6)
+            ctx.fill(vr)
+        }
+        ctx.restoreGState()
+    }
+
+    /// Drop a Library stencil (by id) at the current view center and select it.
+    func insertStencil(_ id: String) {
+        switch id {
+        case "python", "shell", "javascript", "ruby": insertCell(language: id); return
+        case "test": insertTestCell(); return
+        case "chart":
+            let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+            if let sheet = ChartMaker.parse("Quarter\tValue\nQ1\t12\nQ2\t19\nQ3\t9\nQ4\t23") {
+                insertChart(sheet, type: "bar", center: center)
+            }
+            return
+        default: break
+        }
+        // Bundled hand-drawn architecture components (System Design library).
+        if let comp = StencilLibrary.component(id: id) { dropComponent(comp); return }
+
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        var added: [String] = []
+        func drop(_ type: String, _ w: Double, _ h: Double, rounded: Bool = false) {
+            var e = makeElement(type: type, x: center.x - w / 2, y: center.y - h / 2, width: w, height: h)
+            if rounded && (type == "rectangle" || type == "diamond") { e.roundness = Element.Roundness(type: 3) }
+            scene.add(e); added.append(e.id)
+        }
+        switch id {
+        case "rectangle": drop("rectangle", 140, 90)
+        case "rounded":   drop("rectangle", 140, 90, rounded: true)
+        case "ellipse":   drop("ellipse", 130, 90)
+        case "diamond":   drop("diamond", 130, 100)
+        case "pill":      drop("rectangle", 150, 52, rounded: true)
+        case "decision":  drop("diamond", 140, 100)
+        case "connector", "curved":
+            var e = makeElement(type: "arrow", x: center.x - 70, y: center.y, width: 140, height: 0)
+            e.endArrowhead = "arrow"
+            if id == "curved" {
+                e.roundness = Element.Roundness(type: 2)
+                e.points = [[0, 0], [70, -34], [140, 0]]
+            } else {
+                e.points = [[0, 0], [140, 0]]
+            }
+            scene.add(e); added.append(e.id)
+        default: drop("rectangle", 140, 90)
+        }
+        scene.selection = Set(added)
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
+    /// Drop a bundled multi-element stencil: clone its elements to the view
+    /// center with fresh ids and a shared group id, then select the group.
+    private func dropComponent(_ comp: StencilComponent) {
+        let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
+        scene.beginEdit()
+        let gid = UUID().uuidString
+        let now = Date().timeIntervalSince1970 * 1000
+        var added: [String] = []
+        for var e in comp.elements {
+            e.id = UUID().uuidString
+            e.x += center.x
+            e.y += center.y
+            e.groupIds = [gid]
+            e.versionNonce = Int.random(in: 1...2_000_000_000)
+            e.updated = now
+            scene.add(e); added.append(e.id)
+        }
+        scene.selection = Set(added)
+        controller.tool = .select
+        updateSelectionState()
+        needsDisplay = true
+    }
+
     func insertCell(language: String = "shell") {
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()

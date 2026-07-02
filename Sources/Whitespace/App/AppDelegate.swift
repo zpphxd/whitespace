@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcuts: ShortcutsWindow!
     private var cheatSheet = CheatSheetWindow()
     private var searchWindow: SearchWindow!
+    private var sidebar: RightSidebarWindow!
 
     private var autosaveItem: DispatchWorkItem?
     private var pendingOpenURL: URL?
@@ -58,6 +59,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         searchWindow = SearchWindow(
             query: { [weak self] q in self?.searchBoards(q) ?? [] },
             onPick: { [weak self] hit in self?.jumpToHit(hit) })
+        sidebar = RightSidebarWindow(
+            controller: controller,
+            query: { [weak self] q in self?.searchBoards(q) ?? [] },
+            onPick: { [weak self] hit in self?.jumpToHit(hit) },
+            onHighlight: { [weak self] ids in self?.canvas.setSearchHighlights(ids) },
+            onInsert: { [weak self] id in self?.canvas.insertStencil(id) },
+            onConnectVault: { [weak self] in self?.connectVault() },
+            onTogglePin: { Settings.sidebarPinned.toggle() },
+            onClose: { [weak self] in self?.setSidebar(false) })
 
         canvas.onSlashSearch = { [weak self] in self?.linkFile() }
         canvas.onOpenFile = { [weak self] url in self?.openExcalidraw(url) }
@@ -92,6 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.openSearchAction = { [weak self] in self?.openSearch() }
         controller.connectVaultAction = { [weak self] in self?.connectVault() }
         controller.focusElementAction = { [weak self] id in self?.canvas.focusElement(id) }
+        controller.toggleSidebarAction = { [weak self] in
+            guard let self else { return }
+            self.setSidebar(!self.sidebar.isVisible)
+        }
+        controller.openSidebarSearchAction = { [weak self] in self?.openSidebarSearch() }
+        controller.insertVaultNoteByPathAction = { [weak self] rel in self?.insertVaultNote(relativePath: rel) }
+        controller.disconnectVaultAction = { [weak self] in self?.disconnectVault() }
 
         // Route canvas keyboard shortcuts (tool keys, arrows, delete, "/", …) to
         // the canvas whichever chrome panel happens to be key — but never while
@@ -186,11 +203,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Show/hide both chrome panels (top toolbar + left inspector) together.
-    private func showChrome() { topToolbar.show(); inspector.show() }
+    /// Full chrome, tied to entering/leaving edit mode: the palette (top toolbar
+    /// + inspector) plus the right sidebar and transient overlays.
+    private func showChrome() {
+        setPalette(true)
+        if Settings.sidebarPinned { setSidebar(true) }   // pinned → reopens with the chrome
+    }
     private func hideChrome() {
-        topToolbar.hide(); inspector.hide()
-        cheatSheet.hide(); searchWindow?.close()   // transient overlays go with the chrome
+        setPalette(false)
+        sidebar?.hide(); canvas.setSearchHighlights([]); controller.sidebarVisible = false
+    }
+
+    /// Just the tool palette — top toolbar + inspector (and transient overlays).
+    /// Deliberately does NOT touch the right sidebar, so ⌥⌘Q leaves it open.
+    private func setPalette(_ show: Bool) {
+        if show {
+            topToolbar.show(); inspector.show()
+        } else {
+            topToolbar.hide(); inspector.hide()
+            cheatSheet.hide(); searchWindow?.close()
+        }
+    }
+
+    /// Toggle the right sidebar (search / library / vault) from the top-toolbar
+    /// button. Opening slides the panel in; closing clears any search highlight.
+    private func setSidebar(_ show: Bool) {
+        guard sidebar != nil else { return }
+        if show { refreshVault(); sidebar.show() } else { sidebar.hide(); canvas.setSearchHighlights([]) }
+        controller.sidebarVisible = show
+    }
+
+    /// ⌘F: open the sidebar (if hidden) and switch it to the Search tab. Bumping
+    /// the tick tells `SidebarView` to select Search even if it was left on
+    /// Library or Vault. Deliberately doesn't force keyboard focus, to keep the
+    /// glass panel's frosted (inactive) look.
+    private func openSidebarSearch() {
+        guard sidebar != nil else { return }
+        if !sidebar.isVisible { setSidebar(true) }
+        controller.sidebarSearchTick += 1
     }
 
     /// Hide/show the whole tool palette (both panels) while staying in drawing
@@ -198,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func togglePalette() {
         guard window.isEditing else { return }
         paletteHidden.toggle()
-        paletteHidden ? hideChrome() : showChrome()
+        setPalette(!paletteHidden)   // sidebar stays as-is — ⌥⌘Q only hides the palette
         menuBar.setPaletteHidden(paletteHidden)
     }
 
@@ -225,6 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         canvas.boardDidChange()
         controller.currentTab = index
         saveNow()
+        if controller.sidebarVisible { refreshVault() }   // vault is per-board
     }
 
     private func addBoard() {
@@ -390,11 +441,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let text = e.text ?? ""
                 let link = e.link ?? ""
                 guard text.lowercased().contains(q) || link.lowercased().contains(q) else { continue }
-                let raw = !text.isEmpty ? text : link
+                // Which field matched drives both the snippet and the group bucket.
+                let matchedLink = link.lowercased().contains(q) && !text.lowercased().contains(q)
+                let raw = matchedLink ? link : text
                 let snippet = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: "\n", with: " ")
+                let kind: String
+                switch e.type {
+                case "cell": kind = "Code"
+                case "frame": kind = "Frame"
+                case "image", "link": kind = "Link"
+                default: kind = matchedLink ? "Link" : (e.type == "text" ? "Text" : "Shape")
+                }
                 hits.append(SearchHit(boardIndex: bi, boardName: board.name,
-                                      elementId: e.id, snippet: snippet.isEmpty ? "(untitled)" : snippet))
+                                      elementId: e.id, snippet: snippet.isEmpty ? "(untitled)" : snippet,
+                                      kind: kind))
             }
         }
         return hits
@@ -420,6 +481,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         boards[currentBoard].vaultPath = url.path
         saveNow()
+        refreshVault()
+    }
+
+    /// Unbind the current board's vault (back to the empty "Connect vault…" state).
+    private func disconnectVault() {
+        guard boards.indices.contains(currentBoard) else { return }
+        boards[currentBoard].vaultPath = nil
+        saveNow()
+        refreshVault()
+    }
+
+    /// Scan the current board's vault for `.md` notes and publish them to the
+    /// sidebar's Vault tab (capped so a huge vault can't stall the list).
+    private func refreshVault() {
+        guard boards.indices.contains(currentBoard),
+              let vaultPath = boards[currentBoard].vaultPath else {
+            controller.vaultName = nil; controller.vaultPath = nil; controller.vaultNotes = []; return
+        }
+        let vaultURL = URL(fileURLWithPath: vaultPath).standardizedFileURL
+        controller.vaultName = vaultURL.lastPathComponent
+        controller.vaultPath = vaultURL.path
+        let base = vaultURL.path
+        var notes: [VaultNote] = []
+        let fm = FileManager.default
+        if let en = fm.enumerator(at: vaultURL, includingPropertiesForKeys: [.isRegularFileKey],
+                                  options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            for case let u as URL in en {
+                guard u.pathExtension.lowercased() == "md" else { continue }
+                let p = u.standardizedFileURL.path
+                var rel = p.hasPrefix(base + "/") ? String(p.dropFirst(base.count + 1)) : u.lastPathComponent
+                if rel.hasSuffix(".md") { rel = String(rel.dropLast(3)) }
+                notes.append(VaultNote(id: rel, name: u.deletingPathExtension().lastPathComponent,
+                                       folder: (rel as NSString).deletingLastPathComponent))
+                if notes.count >= 2000 { break }
+            }
+        }
+        notes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        controller.vaultNotes = notes
+    }
+
+    /// Build an `obsidian://open` link for a vault-relative note path and drop it
+    /// as a link node. Shared by the sidebar's Vault tab.
+    private func insertVaultNote(relativePath rel: String) {
+        guard boards.indices.contains(currentBoard),
+              let vaultPath = boards[currentBoard].vaultPath else { return }
+        let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
+        let allowed = CharacterSet.urlQueryAllowed
+        let vaultEnc = vaultName.addingPercentEncoding(withAllowedCharacters: allowed) ?? vaultName
+        let fileEnc = rel.addingPercentEncoding(withAllowedCharacters: allowed) ?? rel
+        let link = "obsidian://open?vault=\(vaultEnc)&file=\(fileEnc)"
+        canvas.addLink(link: link, name: (rel as NSString).lastPathComponent)
     }
 
     /// Pick a note from the connected vault and drop it as an `obsidian://` link.

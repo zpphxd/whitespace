@@ -8,6 +8,7 @@ struct SearchHit: Identifiable {
     let boardName: String
     let elementId: String
     let snippet: String
+    var kind: String = "Text"   // grouping bucket: Text / Link / Code / Frame / Shape
 }
 
 /// Key-capable panel so the search field accepts typing (and Esc closes).

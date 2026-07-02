@@ -68,14 +68,6 @@ struct TopToolbarView: View {
                 Button { controller.tool = .frame } label: { Label(Tool.frame.label, systemImage: Tool.frame.symbol) }
                 Button { controller.tool = .laser } label: { Label(Tool.laser.label, systemImage: Tool.laser.symbol) }
                 Button { controller.tool = .lasso } label: { Label(Tool.lasso.label, systemImage: Tool.lasso.symbol) }
-                Divider()
-                Menu {
-                    Button("Shell") { controller.insertCellAction?("shell") }
-                    Button("Python") { controller.insertCellAction?("python") }
-                    Button("JavaScript") { controller.insertCellAction?("javascript") }
-                    Button("Ruby") { controller.insertCellAction?("ruby") }
-                } label: { Label("Code Cell", systemImage: "chevron.left.forwardslash.chevron.right") }
-                Button { controller.runGraphAction?() } label: { Label("Run Graph (⌘⇧↵)", systemImage: "play.circle") }
             } label: {
                 Image(systemName: "ellipsis.circle").frame(width: 30, height: 32)
             }
@@ -83,6 +75,17 @@ struct TopToolbarView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("More tools")
+
+            Divider().frame(height: 22).padding(.horizontal, 2)
+            Button { controller.toggleSidebarAction?() } label: {
+                Image(systemName: "sidebar.right")
+                    .frame(width: 30, height: 32)
+                    .background(controller.sidebarVisible ? Color(hex: 0x6965db) : .clear)
+                    .foregroundStyle(controller.sidebarVisible ? .white : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help("Search, library, and vault sidebar")
         }
     }
 }
