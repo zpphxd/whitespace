@@ -18,5 +18,8 @@ releases/
 
 # Logs
 *.log
-.claude/worktrees/
+
+# Local working dirs (not part of the app)
+.claude/
+ORYZO-1/
 web

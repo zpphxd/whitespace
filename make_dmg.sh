@@ -7,7 +7,9 @@ cd "$(dirname "$0")"
 APP="Whitespace.app"
 DMG="Whitespace.dmg"
 VOL="Whitespace"
-DEVID="Developer ID Application: ZACHARY PHILIP POWERS (3Q5YCK6M5B)"
+# Code-signing identity — override with your own cert to build a distributable
+# DMG (e.g. DEVID="Developer ID Application: Your Name (TEAMID)" ./make_dmg.sh).
+DEVID="${DEVID:-Developer ID Application: ZACHARY PHILIP POWERS (3Q5YCK6M5B)}"
 
 # 1. Build the app bundle (release).
 ./make_app.sh

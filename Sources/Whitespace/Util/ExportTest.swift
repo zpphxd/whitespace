@@ -52,18 +52,20 @@ enum ExportTest {
         frame.text = "Frame 1"
         elements.append(frame)
 
+        // Dev harness runs from the repo root, so repo files resolve via cwd.
+        let repo = FileManager.default.currentDirectoryPath
         var image = Element(type: "image", x: 470, y: 60, width: 120, height: 120, seed: 13)
-        image.link = "/Users/zachpowers/whitespace/AppIcon.png"
+        image.link = "\(repo)/AppIcon.png"
         elements.append(image)
 
         var fileNode = Element(type: "file", x: 700, y: 60, width: 150, height: 172, seed: 12)
         fileNode.text = "Package.swift"
-        fileNode.link = "/Users/zachpowers/whitespace/Package.swift"
+        fileNode.link = "\(repo)/Package.swift"
         fileNode.backgroundColor = "#ffffff"
         elements.append(fileNode)
         var missingNode = Element(type: "file", x: 700, y: 250, width: 150, height: 172, seed: 18)
         missingNode.text = "gone.pdf"
-        missingNode.link = "/Users/zachpowers/whitespace/gone.pdf"
+        missingNode.link = "\(repo)/gone.pdf"
         missingNode.backgroundColor = "#ffffff"
         elements.append(missingNode)
 

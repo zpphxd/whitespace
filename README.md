@@ -105,4 +105,16 @@ Look for the scribble icon in the menu bar; **⌥⌘W** starts drawing.
 - Editable mid-segments for elbow arrows
 - Richer file nodes (real file icons, drag-and-drop from Finder)
 
+## Security note
+
+Live cells execute the code they contain (shell, Python, JavaScript, Ruby) with
+your user's permissions — treat boards from other people like scripts: read the
+cells before running them.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Bundled/ported third-party work (rough.js,
+perfect-freehand, Excalifont, the System Design stencil library, Sparkle) is
+credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 🤖 Built with [Claude Code](https://claude.com/claude-code)
