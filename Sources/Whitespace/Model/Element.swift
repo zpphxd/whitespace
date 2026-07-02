@@ -62,6 +62,10 @@ struct Element: Codable, Identifiable, Equatable {
     var containerId: String?
     var originalText: String?
     var lineHeight: Double?
+    /// Excalidraw image reference (key into the file's `files` map). Whitespace
+    /// renders images from `link`; kept so imported library images can be
+    /// materialized to disk on import.
+    var fileId: String?
 
     // Live cells (executable code / data). `text` holds the source; these add
     // the language and the last captured output. Whitespace extension to the
@@ -128,6 +132,7 @@ struct Element: Codable, Identifiable, Equatable {
         containerId: String? = nil,
         originalText: String? = nil,
         lineHeight: Double? = nil,
+        fileId: String? = nil,
         cellLanguage: String? = nil,
         cellOutput: String? = nil,
         cellExecCount: Int? = nil,
@@ -154,6 +159,7 @@ struct Element: Codable, Identifiable, Equatable {
         self.text = text; self.fontSize = fontSize; self.fontFamily = fontFamily
         self.textAlign = textAlign; self.verticalAlign = verticalAlign
         self.containerId = containerId; self.originalText = originalText; self.lineHeight = lineHeight
+        self.fileId = fileId
         self.cellLanguage = cellLanguage; self.cellOutput = cellOutput
         self.cellExecCount = cellExecCount; self.cellFailed = cellFailed
         self.cellOutputType = cellOutputType; self.cellOutputData = cellOutputData
@@ -208,6 +214,7 @@ struct Element: Codable, Identifiable, Equatable {
         containerId = try? c.decodeIfPresent(String.self, forKey: .containerId)
         originalText = try? c.decodeIfPresent(String.self, forKey: .originalText)
         lineHeight = try? c.decodeIfPresent(Double.self, forKey: .lineHeight)
+        fileId = try? c.decodeIfPresent(String.self, forKey: .fileId)
         cellLanguage = try? c.decodeIfPresent(String.self, forKey: .cellLanguage)
         cellOutput = try? c.decodeIfPresent(String.self, forKey: .cellOutput)
         cellExecCount = try? c.decodeIfPresent(Int.self, forKey: .cellExecCount)

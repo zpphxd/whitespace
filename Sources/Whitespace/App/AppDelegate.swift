@@ -65,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onPick: { [weak self] hit in self?.jumpToHit(hit) },
             onHighlight: { [weak self] ids in self?.canvas.setSearchHighlights(ids) },
             onInsert: { [weak self] id in self?.canvas.insertStencil(id) },
+            onSaveSelection: { [weak self] in self?.saveSelectionToLibrary() },
+            onImportLibrary: { [weak self] in self?.importLibrary() },
+            onDeleteCustom: { [weak self] id in self?.deleteCustomStencil(id) },
             onConnectVault: { [weak self] in self?.connectVault() },
             onTogglePin: { Settings.sidebarPinned.toggle() },
             onClose: { [weak self] in self?.setSidebar(false) })
@@ -107,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.setSidebar(!self.sidebar.isVisible)
         }
         controller.openSidebarSearchAction = { [weak self] in self?.openSidebarSearch() }
+        controller.customStencils = PersonalLibraryStore.load()
+        controller.saveSelectionToLibraryAction = { [weak self] in self?.saveSelectionToLibrary() }
+        controller.importLibraryAction = { [weak self] in self?.importLibrary() }
+        controller.deleteCustomStencilAction = { [weak self] id in self?.deleteCustomStencil(id) }
         controller.insertVaultNoteByPathAction = { [weak self] rel in self?.insertVaultNote(relativePath: rel) }
         controller.disconnectVaultAction = { [weak self] in self?.disconnectVault() }
 
@@ -241,6 +248,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard sidebar != nil else { return }
         if !sidebar.isVisible { setSidebar(true) }
         controller.sidebarSearchTick += 1
+    }
+
+    /// Capture the current canvas selection as a named custom stencil in the
+    /// personal library (Library tab), persisted across launches.
+    private func saveSelectionToLibrary() {
+        guard let elements = canvas.captureSelectionAsStencil(), !elements.isEmpty else {
+            NSSound.beep(); return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Save to Library"
+        alert.informativeText = "Name this stencil so you can drop it again later."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "e.g. Auth flow"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let typed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stencil = CustomStencil(id: UUID().uuidString,
+                                    name: typed.isEmpty ? "Untitled" : typed,
+                                    elements: elements)
+        var lib = controller.customStencils
+        lib.append(stencil)
+        controller.customStencils = lib
+        PersonalLibraryStore.save(lib)
+    }
+
+    /// Import one or more Excalidraw library files (.excalidrawlib) — or whole
+    /// .excalidraw drawings — as custom stencils in the personal library.
+    private func importLibrary() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose Excalidraw library files (.excalidrawlib)"
+        var types: [UTType] = [.json]
+        if let t = UTType(filenameExtension: "excalidrawlib") { types.insert(t, at: 0) }
+        if let t = UTType(filenameExtension: "excalidraw") { types.append(t) }
+        panel.allowedContentTypes = types
+        guard panel.runModal() == .OK else { return }
+        let imported = panel.urls.flatMap { LibraryImport.stencils(from: $0) }
+        guard !imported.isEmpty else {
+            NSSound.beep()
+            let a = NSAlert()
+            a.messageText = "Nothing to import"
+            a.informativeText = "That file didn't contain any library items Whitespace could read."
+            a.runModal()
+            return
+        }
+        var lib = controller.customStencils
+        lib.append(contentsOf: imported)
+        controller.customStencils = lib
+        PersonalLibraryStore.save(lib)
+    }
+
+    /// Remove a saved custom stencil and persist the change.
+    private func deleteCustomStencil(_ id: String) {
+        var lib = controller.customStencils
+        lib.removeAll { $0.id == id }
+        controller.customStencils = lib
+        PersonalLibraryStore.save(lib)
+        StencilThumbnails.invalidate(id)
     }
 
     /// Hide/show the whole tool palette (both panels) while staying in drawing

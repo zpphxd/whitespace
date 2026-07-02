@@ -27,16 +27,38 @@ final class ElementRenderer {
     func invalidate(_ id: String) { cache.removeValue(forKey: id); freehandCache.removeValue(forKey: id) }
     func invalidateAll() { cache.removeAll(); freehandCache.removeAll() }
 
-    func draw(scene: Scene, camera: Camera, in ctx: CGContext) {
+    func draw(scene: Scene, camera: Camera, in ctx: CGContext, hiding: Set<String> = []) {
         ctx.saveGState()
         // Scene → view: scale by zoom, then shift by camera offset.
         ctx.scaleBy(x: camera.zoom, y: camera.zoom)
         ctx.translateBy(x: -camera.offset.x, y: -camera.offset.y)
 
         cellIds = Set(scene.elements.filter { $0.type == "cell" }.map(\.id))
-        for element in scene.elements where !element.isDeleted {
+        for element in scene.elements where !element.isDeleted && !hiding.contains(element.id) {
             draw(element, in: ctx)
         }
+        ctx.restoreGState()
+    }
+
+    /// Overlay pass for transient effects (e.g. the stencil drop pop-in): draws
+    /// just `elements` under the camera transform, scaled about `pivot` (scene
+    /// space) and composited at `alpha` via a transparency layer.
+    func drawOverlay(elements: [Element], camera: Camera, pivot: CGPoint,
+                     scale: CGFloat, alpha: CGFloat, in ctx: CGContext) {
+        guard !elements.isEmpty else { return }
+        ctx.saveGState()
+        ctx.setAlpha(alpha)
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        ctx.scaleBy(x: camera.zoom, y: camera.zoom)
+        ctx.translateBy(x: -camera.offset.x, y: -camera.offset.y)
+        // Pop about the group's center, in scene space.
+        ctx.translateBy(x: pivot.x, y: pivot.y)
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.translateBy(x: -pivot.x, y: -pivot.y)
+        for element in elements where !element.isDeleted {
+            draw(element, in: ctx)
+        }
+        ctx.endTransparencyLayer()
         ctx.restoreGState()
     }
 
@@ -558,9 +580,12 @@ final class ElementRenderer {
             .font: font, .foregroundColor: color.withAlphaComponent(opacity),
         ]
         let lineHeight = CGFloat(e.lineHeight ?? 1.25) * size
-        // Bound (container) text is centered in the shape; free text is left/top.
+        // Bound (container) text is centered in the shape and wraps to it; free
+        // text renders its explicit newlines only — Excalidraw never soft-wraps
+        // free text (its width is derived from content), and wrapping it here
+        // clipped the last character whenever our font metrics ran a hair wide.
         let centered = e.containerId != nil
-        let wrapWidth: CGFloat = e.width > 8 ? max(CGFloat(e.width) - (centered ? 16 : 4), 24) : 100_000
+        let wrapWidth: CGFloat = (centered && e.width > 8) ? max(CGFloat(e.width) - 16, 24) : 100_000
 
         // Build wrapped lines.
         var lines: [CTLine] = []

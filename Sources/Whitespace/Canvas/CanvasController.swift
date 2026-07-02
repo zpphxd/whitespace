@@ -55,6 +55,10 @@ final class CanvasController: ObservableObject {
     var openSidebarSearchAction: (() -> Void)?         // ⌘F: open the sidebar on its Search tab
     var setSearchHighlightsAction: ((Set<String>) -> Void)?  // wash matching elements on the canvas
     var insertStencilAction: ((String) -> Void)?       // drop a library stencil at the canvas center
+    @Published var customStencils: [CustomStencil] = []  // the user's saved stencils (Library → Personal)
+    var saveSelectionToLibraryAction: (() -> Void)?    // capture the selection as a custom stencil
+    var importLibraryAction: (() -> Void)?             // import .excalidrawlib files into the library
+    var deleteCustomStencilAction: ((String) -> Void)? // remove a saved custom stencil by id
     @Published var sidebarVisible = false
     @Published var sidebarSearchTick = 0               // bump to force the sidebar onto its Search tab
 

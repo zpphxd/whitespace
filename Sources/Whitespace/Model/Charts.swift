@@ -22,28 +22,34 @@ enum ChartMaker {
         return Double(t)
     }
 
-    /// Parse clipboard text into a spreadsheet, or nil if it isn't tabular data.
-    static func parse(_ text: String) -> Spreadsheet? {
+    /// Split tabular text into a rectangular grid of trimmed cells, choosing the
+    /// delimiter (tab > comma > semicolon) that yields the widest consistent rows.
+    /// Nil if it isn't at least a 2-row table.
+    static func cells(_ text: String) -> [[String]]? {
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
                              .replacingOccurrences(of: "\r", with: "\n")
         let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 2 else { return nil }
 
-        // Pick the delimiter (tab > comma > semicolon) giving consistent, widest rows.
         var best: [[String]]?
         var bestCols = 1
         for d in ["\t", ",", ";"] {
-            let cells = lines.map { line in
+            let grid = lines.map { line in
                 line.components(separatedBy: d).map { $0.trimmingCharacters(in: .whitespaces) }
             }
-            let cols = cells[0].count
-            if cols > bestCols && cells.allSatisfy({ $0.count == cols }) {
-                best = cells; bestCols = cols
+            let cols = grid[0].count
+            if cols > bestCols && grid.allSatisfy({ $0.count == cols }) {
+                best = grid; bestCols = cols
             }
         }
-        let cells = best ?? lines.map { [$0.trimmingCharacters(in: .whitespaces)] }
-        return parseCells(cells)
+        return best ?? lines.map { [$0.trimmingCharacters(in: .whitespaces)] }
+    }
+
+    /// Parse clipboard text into a spreadsheet, or nil if it isn't tabular data.
+    static func parse(_ text: String) -> Spreadsheet? {
+        guard let grid = cells(text) else { return nil }
+        return parseCells(grid)
     }
 
     private static func parseCells(_ cells: [[String]]) -> Spreadsheet? {

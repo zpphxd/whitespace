@@ -1,10 +1,25 @@
 import AppKit
 
-/// Hand-drawn text font. Excalidraw ships only subsetted `.woff2` (which Core
-/// Text can't load), so we fall back to a macOS hand-style face. Drop an
-/// `Excalifont.ttf` into Resources and register it here to match exactly.
+/// Hand-drawn text font. The real Excalifont (OFL, converted from Excalidraw's
+/// woff2) ships in Resources and is registered at launch, so text metrics match
+/// Excalidraw exactly; macOS hand-style faces remain as fallbacks.
 enum Fonts {
-    private static let candidates = ["Bradley Hand", "Chalkboard SE", "Noteworthy"]
+    private static let candidates = ["Excalifont", "Bradley Hand", "Chalkboard SE", "Noteworthy"]
+
+    /// Register the bundled Excalifont with Core Text (process scope). Looks in
+    /// the app bundle first, then repo-relative paths so dev-harness CLI runs
+    /// (`--render-stencils` etc.) get the same metrics.
+    static func registerBundled() {
+        guard NSFont(name: "Excalifont", size: 12) == nil else { return }   // already available
+        var urls: [URL] = []
+        if let u = Bundle.main.url(forResource: "Excalifont", withExtension: "ttf") { urls.append(u) }
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        urls.append(exe.appendingPathComponent("../../Resources/Excalifont.ttf").standardizedFileURL)
+        urls.append(URL(fileURLWithPath: "Resources/Excalifont.ttf"))
+        for url in urls where FileManager.default.fileExists(atPath: url.path) {
+            if CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil) { return }
+        }
+    }
 
     static func handDrawn(size: CGFloat) -> NSFont {
         for name in candidates {
@@ -22,7 +37,7 @@ enum Fonts {
 
     /// Curated fonts that ship with macOS (so they always render).
     static let options: [Option] = [
-        .init(id: 1, name: "Hand-drawn", psName: "Bradley Hand"),
+        .init(id: 1, name: "Hand-drawn", psName: "Excalifont"),
         .init(id: 9, name: "Chalkboard", psName: "Chalkboard SE"),
         .init(id: 7, name: "Noteworthy", psName: "Noteworthy"),
         .init(id: 6, name: "Marker Felt", psName: "Marker Felt"),

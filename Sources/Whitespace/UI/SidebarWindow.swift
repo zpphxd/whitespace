@@ -20,12 +20,18 @@ final class RightSidebarWindow {
          onPick: @escaping (SearchHit) -> Void,
          onHighlight: @escaping (Set<String>) -> Void,
          onInsert: @escaping (String) -> Void,
+         onSaveSelection: @escaping () -> Void,
+         onImportLibrary: @escaping () -> Void,
+         onDeleteCustom: @escaping (String) -> Void,
          onConnectVault: @escaping () -> Void,
          onTogglePin: @escaping () -> Void,
          onClose: @escaping () -> Void) {
         let root = SidebarView(controller: controller,
                                query: query, onPick: onPick, onHighlight: onHighlight,
-                               onInsert: onInsert, onConnectVault: onConnectVault,
+                               onInsert: onInsert,
+                               onSaveSelection: onSaveSelection, onImportLibrary: onImportLibrary,
+                               onDeleteCustom: onDeleteCustom,
+                               onConnectVault: onConnectVault,
                                onInsertNote: { controller.insertVaultNoteByPathAction?($0) },
                                onTogglePin: onTogglePin, onClose: onClose)
             .environment(\.controlActiveState, .inactive)
@@ -106,6 +112,9 @@ private struct SidebarView: View {
     let onPick: (SearchHit) -> Void
     let onHighlight: (Set<String>) -> Void
     let onInsert: (String) -> Void
+    let onSaveSelection: () -> Void
+    let onImportLibrary: () -> Void
+    let onDeleteCustom: (String) -> Void
     let onConnectVault: () -> Void
     let onInsertNote: (String) -> Void
     let onTogglePin: () -> Void
@@ -120,7 +129,9 @@ private struct SidebarView: View {
             Group {
                 switch tab {
                 case .search:  SearchTab(query: query, onPick: onPick, onHighlight: onHighlight)
-                case .library: LibraryTab(onInsert: onInsert)
+                case .library: LibraryTab(controller: controller, onInsert: onInsert,
+                                          onSaveSelection: onSaveSelection, onImportLibrary: onImportLibrary,
+                                          onDeleteCustom: onDeleteCustom)
                 case .vault:   VaultTab(controller: controller, onConnectVault: onConnectVault, onInsertNote: onInsertNote)
                 }
             }
@@ -257,63 +268,149 @@ private struct SearchTab: View {
 // MARK: - Library tab
 
 private struct LibraryTab: View {
+    @ObservedObject var controller: CanvasController
     let onInsert: (String) -> Void
+    let onSaveSelection: () -> Void
+    let onImportLibrary: () -> Void
+    let onDeleteCustom: (String) -> Void
 
     // Only stencils that AREN'T a one-click top-bar tool — plain rect/ellipse/
     // diamond/line/arrow live in the toolbar, so they're deliberately absent here.
-    private let flow = [Stencil(id: "pill", symbol: "capsule", label: "Start/end"),
-                        Stencil(id: "curved", symbol: "point.topleft.down.curvedto.point.bottomright.up", label: "Curved")]
-    // Professionally hand-drawn architecture components, bundled from the
-    // community System Design library (see StencilLibrary). Dropping one places
-    // the real multi-element composite, not a plain labeled box.
+    // Flow + Architecture tiles show REAL previews rendered by the app's own
+    // rough renderer; only the code-cell tiles keep symbolic icons.
+    private let flow: [(id: String, name: String, elements: [Element])] = [
+        ("pill", "Start/end", StencilThumbnails.flowElements("pill")),
+        ("curved", "Curved", StencilThumbnails.flowElements("curved")),
+    ]
     private let architecture = StencilLibrary.systemDesign.map {
-        Stencil(id: $0.id, symbol: $0.symbol, label: $0.name)
+        (id: $0.id, name: $0.name, elements: $0.elements)
     }
     private let whitespace = [Stencil(id: "python", symbol: "chevron.left.forwardslash.chevron.right", label: "Python"),
                               Stencil(id: "shell", symbol: "terminal", label: "Shell"),
                               Stencil(id: "chart", symbol: "chart.bar", label: "Chart"),
                               Stencil(id: "test", symbol: "checkmark.seal", label: "Test")]
 
-    private let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+    private let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+    private let cellCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Personal library").font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: 0x6965db))
-                Text("Select something on the canvas to save it here.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 12)
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.18), style: SwiftUI.StrokeStyle(lineWidth: 1, dash: [4])))
-
-                group("Flow", flow)
-                group("Architecture", architecture)
-                group("Whitespace", whitespace)
+                personal
+                previewGroup("Flow", flow)
+                previewGroup("Architecture", architecture)
+                cellGroup("Whitespace", whitespace)
             }
         }
     }
 
-    private func group(_ title: String, _ items: [Stencil]) -> some View {
+    /// A grid of stencils whose tiles are actual renders of their elements.
+    private func previewGroup(_ title: String, _ items: [(id: String, name: String, elements: [Element])]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
             LazyVGrid(columns: cols, spacing: 8) {
-                ForEach(items) { s in
-                    Button { onInsert(s.id) } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: s.symbol).font(.system(size: 18))
-                                .frame(height: 24)
-                            Text(s.label).font(.system(size: 9)).foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
-                        .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Add \(s.label)")
+                ForEach(items, id: \.id) { s in
+                    StencilTile(label: s.name,
+                                image: StencilThumbnails.image(key: s.id, elements: s.elements),
+                                symbol: "square.on.square") { onInsert(s.id) }
                 }
             }
         }
+    }
+
+    /// User-saved stencils, plus a button to store the current selection.
+    private var personal: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Personal library").font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(hex: 0x6965db))
+                Spacer()
+                Button { onImportLibrary() } label: {
+                    Image(systemName: "square.and.arrow.down").font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .help("Import an Excalidraw library file (.excalidrawlib)")
+                Button { onSaveSelection() } label: {
+                    Label("Save selection", systemImage: "plus")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .disabled(!controller.hasSelection)
+                .foregroundStyle(controller.hasSelection ? Color(hex: 0x6965db) : .secondary)
+                .help("Save the current canvas selection as a reusable stencil")
+            }
+            if controller.customStencils.isEmpty {
+                Text("Select something on the canvas, then Save selection to keep it here.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 12)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.18), style: SwiftUI.StrokeStyle(lineWidth: 1, dash: [4])))
+            } else {
+                LazyVGrid(columns: cols, spacing: 8) {
+                    ForEach(controller.customStencils) { s in
+                        StencilTile(label: s.name,
+                                    image: StencilThumbnails.image(key: s.id, elements: s.elements),
+                                    symbol: "square.on.square") { onInsert(s.id) }
+                        .contextMenu {
+                            Button(role: .destructive) { onDeleteCustom(s.id) } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Code-cell stencils: app widgets, so symbolic icons (no meaningful render).
+    private func cellGroup(_ title: String, _ items: [Stencil]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            LazyVGrid(columns: cellCols, spacing: 8) {
+                ForEach(items) { s in
+                    StencilTile(label: s.label, image: nil, symbol: s.symbol) { onInsert(s.id) }
+                }
+            }
+        }
+    }
+}
+
+/// One library tile: a real rendered preview (or an SF Symbol fallback) over a
+/// caption, with a springy hover highlight.
+private struct StencilTile: View {
+    let label: String
+    let image: NSImage?
+    let symbol: String
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Group {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: symbol).font(.system(size: 18))
+                    }
+                }
+                .frame(height: 42)
+                .frame(maxWidth: .infinity)
+                Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.vertical, 7).padding(.horizontal, 5)
+            .background(.white.opacity(hovered ? 0.24 : 0.10), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(Color(hex: 0x6965db).opacity(hovered ? 0.6 : 0), lineWidth: 1))
+            .scaleEffect(hovered ? 1.05 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .animation(.spring(response: 0.22, dampingFraction: 0.72), value: hovered)
+        .help("Add \(label)")
     }
 }
 

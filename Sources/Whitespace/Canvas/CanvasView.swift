@@ -46,6 +46,7 @@ final class CanvasView: NSView {
         case freedraw(id: String)
         case move(origins: [String: CGPoint])
         case resize(id: String, handle: Handle, start: CGRect)
+        case resizeGroup(handle: Handle, start: CGRect)   // scale a whole multi-selection
         case vertex(id: String, index: Int)
         case marquee(startScene: CGPoint)
         case pan
@@ -55,6 +56,40 @@ final class CanvasView: NSView {
         case laser
     }
     private var drag: Drag = .none
+
+    /// Per-element starting geometry captured when a group resize begins, so every
+    /// member can be remapped from the group's original box to the dragged one.
+    private struct ElementSnap { var rect: CGRect; var points: [CGPoint]?; var fontSize: Double? }
+    private var groupSnap: [String: ElementSnap] = [:]
+
+    // Stencil-drop pop-in: the dropped ids scale/fade in about their center.
+    private var dropAnim: (ids: Set<String>, center: CGPoint, start: CFTimeInterval)?
+    private var dropAnimTimer: Timer?
+    let dropAnimDuration: CFTimeInterval = 0.32
+
+    func easeOutBack(_ t: CGFloat) -> CGFloat {
+        let c1: CGFloat = 1.70158, c3 = c1 + 1
+        return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+    }
+
+    /// Kick off the pop-in for freshly added elements (60 fps repaint, then stop).
+    private func startDropAnimation(ids: Set<String>) {
+        let members = scene.elements.filter { ids.contains($0.id) }
+        guard let first = members.first else { return }
+        let box = members.dropFirst().reduce(first.boundingRect) { $0.union($1.boundingRect) }
+        dropAnim = (ids, CGPoint(x: box.midX, y: box.midY), CACurrentMediaTime())
+        dropAnimTimer?.invalidate()
+        dropAnimTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let anim = self.dropAnim else { return }
+                if CACurrentMediaTime() - anim.start >= self.dropAnimDuration {
+                    self.dropAnim = nil
+                    self.dropAnimTimer?.invalidate(); self.dropAnimTimer = nil
+                }
+                self.needsDisplay = true
+            }
+        }
+    }
     private var dragStart: CGPoint = .zero
     private var lastPanPoint: CGPoint = .zero
     private var spaceDown = false
@@ -215,7 +250,19 @@ final class CanvasView: NSView {
         }
 
         drawSearchHighlights(in: ctx)
-        renderer.draw(scene: scene, camera: camera, in: ctx)
+        if let anim = dropAnim {
+            // Pop-in: freshly dropped stencil scales up about its center with a
+            // slight overshoot while fading in; the rest draws normally.
+            let t = min(1, (CACurrentMediaTime() - anim.start) / dropAnimDuration)
+            renderer.draw(scene: scene, camera: camera, in: ctx, hiding: anim.ids)
+            let eased = easeOutBack(CGFloat(t))
+            let animElements = scene.elements.filter { anim.ids.contains($0.id) }
+            renderer.drawOverlay(elements: animElements, camera: camera, pivot: anim.center,
+                                 scale: 0.55 + 0.45 * eased,
+                                 alpha: min(1, CGFloat(t) * 3), in: ctx)
+        } else {
+            renderer.draw(scene: scene, camera: camera, in: ctx)
+        }
 
         drawSelection(in: ctx)
         drawMarquee(in: ctx)
@@ -312,9 +359,15 @@ final class CanvasView: NSView {
             return
         }
 
-        // Multi-selection: axis-aligned box.
+        // Multi-selection / group: axis-aligned box with corner + edge handles
+        // that scale the whole set.
         let r = viewRect(bounds).insetBy(dx: -4, dy: -4)
         ctx.stroke(r)
+        for h in Handle.allCases {
+            let hr = handleRect(h, in: r)
+            ctx.setFillColor(NSColor.white.cgColor); ctx.fill(hr)
+            ctx.setStrokeColor(purple); ctx.stroke(hr)
+        }
     }
 
     private func rotatePoint(_ p: CGPoint, around c: CGPoint, by angle: CGFloat) -> CGPoint {
@@ -506,6 +559,11 @@ final class CanvasView: NSView {
             resize(id: id, handle: handle, start: start, to: p)
             rebuildArrowsBound(to: [id])
             syncBoundTexts(to: [id])
+        case .resizeGroup(let handle, let start):
+            resizeGroup(handle: handle, start: start, to: p)
+            let ids = Set(groupSnap.keys)
+            rebuildArrowsBound(to: ids)
+            syncBoundTexts(to: ids)
         case .vertex(let id, let index):
             guard var pts = scene.element(id)?.absolutePoints, index < pts.count else { break }
             pts[index] = p
@@ -639,6 +697,9 @@ final class CanvasView: NSView {
             reassignFrameMembership([id])
             controller.tool = .select   // revert to the pointer after placing
             updateSelectionState()
+        case .resizeGroup:
+            reassignFrameMembership(Set(groupSnap.keys))
+            groupSnap = [:]
         default:
             break
         }
@@ -735,6 +796,17 @@ final class CanvasView: NSView {
                 }
             }
         }
+        // Group / multi-selection resize: a handle on the shared bounding box
+        // scales every selected element together.
+        if scene.selection.count >= 2, let sb = selectionBounds() {
+            let r = viewRect(sb).insetBy(dx: -4, dy: -4)
+            for h in Handle.allCases where handleRect(h, in: r).insetBy(dx: -3, dy: -3).contains(viewPt) {
+                scene.beginEdit()
+                groupSnap = snapshotSelection()
+                drag = .resizeGroup(handle: h, start: sb)
+                return
+            }
+        }
         if let hit = scene.hitTest(p, tolerance: 8 / camera.zoom) {
             let members = groupMembers(of: hit)  // whole group, if grouped
             if shift {
@@ -814,6 +886,9 @@ final class CanvasView: NSView {
     private func topShape(at p: CGPoint, excluding excludeId: String, tolerance: CGFloat = 4) -> Element? {
         for e in scene.elements.reversed()
         where e.id != excludeId && connectableTypes.contains(e.type) && !e.locked {
+            // A shape's own bound label must not intercept the binding — it sits
+            // on top of (and inside) its shape, so resolve to the shape beneath.
+            if e.type == "text" && e.containerId != nil { continue }
             if e.hitTest(p, tolerance: tolerance) { return e }
         }
         return nil
@@ -1016,6 +1091,48 @@ final class CanvasView: NSView {
         renderer.invalidate(id)
     }
 
+    /// Snapshot each selected element's starting geometry for a group resize.
+    private func snapshotSelection() -> [String: ElementSnap] {
+        var snap: [String: ElementSnap] = [:]
+        for e in scene.elements where scene.selection.contains(e.id) {
+            snap[e.id] = ElementSnap(rect: e.boundingRect,
+                                     points: e.isLinear ? e.absolutePoints : nil,
+                                     fontSize: e.fontSize)
+        }
+        return snap
+    }
+
+    /// Scale a whole multi-selection: derive the new group box from the dragged
+    /// handle, then remap every member proportionally about the anchored corner.
+    private func resizeGroup(handle: Handle, start: CGRect, to p: CGPoint) {
+        var r = start
+        if handle.movesLeft { let nx = min(p.x, r.maxX - 4); r.size.width = r.maxX - nx; r.origin.x = nx }
+        if handle.movesRight { r.size.width = max(4, p.x - r.minX) }
+        if handle.movesTop { let ny = min(p.y, r.maxY - 4); r.size.height = r.maxY - ny; r.origin.y = ny }
+        if handle.movesBottom { r.size.height = max(4, p.y - r.minY) }
+        let sx = start.width  > 0.5 ? r.width  / start.width  : 1
+        let sy = start.height > 0.5 ? r.height / start.height : 1
+        let fontScale = min(sx, sy)   // text can't distort, so scale uniformly
+        for (id, snap) in groupSnap {
+            if let pts0 = snap.points {   // line / arrow / freedraw: remap points
+                let newPts = pts0.map { pt in
+                    CGPoint(x: r.minX + (pt.x - start.minX) * sx,
+                            y: r.minY + (pt.y - start.minY) * sy)
+                }
+                setAbsolutePoints(id, newPts)
+            } else {
+                scene.update(id: id) { e in
+                    e.x = r.minX + (snap.rect.minX - start.minX) * sx
+                    e.y = r.minY + (snap.rect.minY - start.minY) * sy
+                    e.width  = max(1, snap.rect.width  * sx)
+                    e.height = max(1, snap.rect.height * sy)
+                    if e.type == "text", let fs = snap.fontSize { e.fontSize = max(4, fs * fontScale) }
+                }
+            }
+            renderer.invalidate(id)
+        }
+    }
+
     /// Clear everything on the current board (confirmed, undoable with ⌘Z).
     func clearBoard() {
         guard !scene.elements.isEmpty else { return }
@@ -1185,19 +1302,30 @@ final class CanvasView: NSView {
     }
 
     private var contextPath: String?
+    private var contextLink: String?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard isEditing else { return nil }
         let p = camera.viewToScene(viewPoint(event))
+        // Any element carrying a link gets a menu — local files/images expose
+        // Finder actions; every link (URL included) can become a QR code.
         guard let hit = scene.hitTest(p, tolerance: 8 / camera.zoom),
-              hit.type == "file" || hit.type == "image",
-              let link = hit.link, !link.contains("://") else { return nil }
+              let link = hit.link else { return nil }
         scene.selection = [hit.id]; updateSelectionState(); needsDisplay = true
-        contextPath = (link as NSString).expandingTildeInPath
+        contextLink = link
+        let isURL = link.contains("://")
+        let localPath = isURL ? nil : (link as NSString).expandingTildeInPath
+        contextPath = localPath
+        let fileExists = localPath.map { FileManager.default.fileExists(atPath: $0) } ?? false
+
         let menu = NSMenu()
         menu.addItem(withTitle: "Open", action: #selector(ctxOpen), keyEquivalent: "")
-        menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
-        menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
+        if fileExists {
+            menu.addItem(withTitle: "Quick Look", action: #selector(ctxQuickLook), keyEquivalent: "")
+            menu.addItem(withTitle: "Reveal in Finder", action: #selector(ctxReveal), keyEquivalent: "")
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Create QR Code", action: #selector(ctxQRCode), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Delete", action: #selector(ctxDelete), keyEquivalent: "")
         menu.items.forEach { $0.target = self }
@@ -1205,11 +1333,19 @@ final class CanvasView: NSView {
     }
 
     @objc private func ctxOpen() {
-        if let p = contextPath { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
+        if let link = contextLink { openLink(link) }
     }
     @objc private func ctxQuickLook() { toggleQuickLook() }
     @objc private func ctxReveal() {
         if let p = contextPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+    }
+    /// Generate a QR code image for the right-clicked element's link and drop it
+    /// just to the right of that element.
+    @objc private func ctxQRCode() {
+        guard let link = contextLink, let png = QRCode.generatePNG(for: link) else { NSSound.beep(); return }
+        let anchor = scene.selection.first.flatMap { scene.element($0) }
+        let at = anchor.map { CGPoint(x: $0.boundingRect.maxX + 110, y: $0.boundingRect.midY) }
+        addImage(path: png, at: at)
     }
     @objc private func ctxDelete() { deleteSelectionAction() }
 
@@ -1358,10 +1494,10 @@ final class CanvasView: NSView {
                 chartWheel.present(options: chartWheelOptions()) { [weak self] choice in
                     guard let self, let choice else { return }   // cancelled
                     self.scene.beginEdit()
-                    if choice == "text" {
-                        self.insertTextBox(str, center: center)
-                    } else {
-                        self.insertChart(sheet, type: choice, center: center)
+                    switch choice {
+                    case "text":  self.insertTextBox(str, center: center)
+                    case "table": self.insertTable(str, center: center)
+                    default:      self.insertChart(sheet, type: choice, center: center)
                     }
                 }
                 return
@@ -1388,12 +1524,27 @@ final class CanvasView: NSView {
         updateSelectionState()
     }
 
-    /// Chart types offered in the paste wheel, plus a "paste as text" escape.
+    /// Chart types offered in the paste wheel, plus Table and a "paste as text".
     private func chartWheelOptions() -> [ChartWheelOption] {
         let titles = ["bar": "Bar", "line": "Line", "hbar": "Horizontal",
                       "step": "Step", "scatter": "Scatter", "lollipop": "Lollipop"]
         return ChartMaker.types.map { ChartWheelOption(type: $0, title: titles[$0] ?? $0.capitalized) }
-            + [ChartWheelOption(type: "text", title: "Text")]
+            + [ChartWheelOption(type: "table", title: "Table"),
+               ChartWheelOption(type: "text", title: "Text")]
+    }
+
+    /// Add a native hand-drawn table from pasted grid data, grouped and selected.
+    private func insertTable(_ str: String, center: CGPoint) {
+        guard let cells = ChartMaker.cells(str) else { insertTextBox(str, center: center); return }
+        let els = TableMaker.elements(cells, center: center)
+        guard !els.isEmpty else { insertTextBox(str, center: center); return }
+        var ids = Set<String>()
+        for e in els { scene.add(e); ids.insert(e.id) }
+        scene.selection = ids
+        controller.tool = .select
+        updateSelectionState()
+        startDropAnimation(ids: ids)
+        needsDisplay = true
     }
 
     /// Add a generated chart's elements, grouped and selected.
@@ -1719,7 +1870,9 @@ final class CanvasView: NSView {
         default: break
         }
         // Bundled hand-drawn architecture components (System Design library).
-        if let comp = StencilLibrary.component(id: id) { dropComponent(comp); return }
+        if let comp = StencilLibrary.component(id: id) { dropComponent(comp.elements); return }
+        // User-saved stencils (Library → Personal).
+        if let cs = controller.customStencils.first(where: { $0.id == id }) { dropComponent(cs.elements); return }
 
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
@@ -1751,22 +1904,44 @@ final class CanvasView: NSView {
         scene.selection = Set(added)
         controller.tool = .select
         updateSelectionState()
+        startDropAnimation(ids: Set(added))
         needsDisplay = true
     }
 
-    /// Drop a bundled multi-element stencil: clone its elements to the view
-    /// center with fresh ids and a shared group id, then select the group.
-    private func dropComponent(_ comp: StencilComponent) {
+    /// Snapshot the current selection as reusable stencil elements: copies of the
+    /// selected elements translated so their combined bounding box is centered on
+    /// the origin (matching the bundled stencils). Returns nil if nothing's picked.
+    func captureSelectionAsStencil() -> [Element]? {
+        let sel = scene.elements.filter { scene.selection.contains($0.id) }
+        guard let first = sel.first else { return nil }
+        let box = sel.dropFirst().reduce(first.boundingRect) { $0.union($1.boundingRect) }
+        let cx = box.midX, cy = box.midY
+        return sel.map { var c = $0; c.x -= cx; c.y -= cy; return c }
+    }
+
+    /// Drop a multi-element stencil (bundled or user-saved): clone its elements
+    /// to the view center with fresh ids and a shared group id, then select them.
+    private func dropComponent(_ elements: [Element]) {
         let center = camera.viewToScene(CGPoint(x: bounds.midX, y: bounds.midY))
         scene.beginEdit()
         let gid = UUID().uuidString
         let now = Date().timeIntervalSince1970 * 1000
+        // Fresh id per element, keeping internal cross-references intact (a bound
+        // text's containerId, arrow bindings, boundElements) so composites that
+        // reference each other survive the clone.
+        let idMap = Dictionary(uniqueKeysWithValues: elements.map { ($0.id, UUID().uuidString) })
         var added: [String] = []
-        for var e in comp.elements {
-            e.id = UUID().uuidString
+        for var e in elements {
+            e.id = idMap[e.id] ?? UUID().uuidString
             e.x += center.x
             e.y += center.y
             e.groupIds = [gid]
+            e.containerId = e.containerId.flatMap { idMap[$0] }
+            e.startBindingId = e.startBindingId.flatMap { idMap[$0] }
+            e.endBindingId = e.endBindingId.flatMap { idMap[$0] }
+            e.boundElements = e.boundElements?.compactMap { b in
+                idMap[b.id].map { Element.BoundElement(id: $0, type: b.type) }
+            }
             e.versionNonce = Int.random(in: 1...2_000_000_000)
             e.updated = now
             scene.add(e); added.append(e.id)
@@ -1774,6 +1949,7 @@ final class CanvasView: NSView {
         scene.selection = Set(added)
         controller.tool = .select
         updateSelectionState()
+        startDropAnimation(ids: Set(added))
         needsDisplay = true
     }
 

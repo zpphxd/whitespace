@@ -14,6 +14,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/Whitespace "$APP/Contents/MacOS/Whitespace"
 
+# Bundled resources (hand-drawn Excalifont for exact Excalidraw text metrics).
+[ -f Resources/Excalifont.ttf ] && cp Resources/Excalifont.ttf "$APP/Contents/Resources/"
+
 # App icon: generate AppIcon.icns from AppIcon.png (all required sizes).
 ICON_PLIST=""
 if [ -f AppIcon.png ]; then
