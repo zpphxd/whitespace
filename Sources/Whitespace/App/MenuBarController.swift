@@ -10,6 +10,7 @@ final class MenuBarController {
     private let onToggleEdit: () -> Void
     private var quitHandler: (() -> Void)?
     private var setEditOpacity: ((CGFloat) -> Void)?
+    private var setBoardPattern: ((String) -> Void)?
     private var toggleKeepIcons: ((Bool) -> Void)?
     private var togglePalette: (() -> Void)?
     private var exportPNG: (() -> Void)?
@@ -22,10 +23,12 @@ final class MenuBarController {
     private var connectVault: (() -> Void)?
     private var insertVaultNote: (() -> Void)?
     private let paletteItem: NSMenuItem
+    private var loginMenuItem: NSMenuItem?
 
     init(onToggleEdit: @escaping () -> Void,
          onQuit: @escaping () -> Void,
          onSetEditOpacity: @escaping (CGFloat) -> Void,
+         onSetBoardPattern: @escaping (String) -> Void,
          onToggleKeepIcons: @escaping (Bool) -> Void,
          onTogglePalette: @escaping () -> Void,
          onExportPNG: @escaping () -> Void,
@@ -40,6 +43,7 @@ final class MenuBarController {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setEditOpacity = onSetEditOpacity
+        self.setBoardPattern = onSetBoardPattern
         self.toggleKeepIcons = onToggleKeepIcons
         self.togglePalette = onTogglePalette
         self.exportPNG = onExportPNG
@@ -117,6 +121,13 @@ final class MenuBarController {
         menu.addItem(exportHTMLItem)
         menu.addItem(.separator())
 
+        let loginItem = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem(_:)), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = LoginItem.isEnabled ? .on : .off
+        loginMenuItem = loginItem
+        menu.addItem(loginItem)
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit Whitespace", action: nil, keyEquivalent: "q")
         quit.target = self
         quit.action = #selector(quit(_:))
@@ -138,8 +149,40 @@ final class MenuBarController {
             item.state = Settings.editBoardOpacity == CGFloat(value) ? .on : .off
             sub.addItem(item)
         }
+
+        sub.addItem(.separator())
+        let bgHeader = NSMenuItem(title: "Background:", action: nil, keyEquivalent: "")
+        bgHeader.isEnabled = false
+        sub.addItem(bgHeader)
+        for (title, value) in [("Dots", "dots"), ("Grid", "grid"), ("Plain", "none")] {
+            let item = NSMenuItem(title: "  \(title)", action: #selector(boardPattern(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = value
+            item.state = Settings.boardPattern == value ? .on : .off
+            sub.addItem(item)
+        }
         board.submenu = sub
         return board
+    }
+
+    @objc private func toggleLoginItem(_ sender: NSMenuItem) {
+        let now = LoginItem.setEnabled(!(sender.state == .on))
+        sender.state = now ? .on : .off
+    }
+
+    /// Sync the menu checkmark with the current login-item state (after the
+    /// first-run prompt toggles it).
+    func refreshLoginItem() { loginMenuItem?.state = LoginItem.isEnabled ? .on : .off }
+
+    @objc private func boardPattern(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String else { return }
+        Settings.boardPattern = value
+        setBoardPattern?(value)
+        sender.menu?.items.forEach { item in
+            if item.action == #selector(boardPattern(_:)) {
+                item.state = (item.representedObject as? String) == value ? .on : .off
+            }
+        }
     }
 
     private func refreshChecks(in menu: NSMenu?, selector: Selector, current: CGFloat) {

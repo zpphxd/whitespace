@@ -43,6 +43,7 @@ final class CanvasController: ObservableObject {
     var setLinkColorAction: ((String) -> Void)?
     var setLinkStyleAction: ((String) -> Void)?
     var setStayOnWallpaperAction: ((Bool) -> Void)?
+    var setBoardPatternAction: ((String) -> Void)?  // dots / grid / none background
     var openShortcutsAction: (() -> Void)?          // "?" → shortcuts cheat sheet
     var configureHotkeysAction: (() -> Void)?       // rebind the ⌥⌘W / ⌥⌘Q global hotkeys
     // Cross-cutting hooks (wired in AppDelegate).

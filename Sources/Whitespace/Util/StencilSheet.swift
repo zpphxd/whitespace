@@ -51,6 +51,56 @@ enum StencilSheet {
         FileHandle.standardError.write(Data("wrote stencil sheet (\(comps.count) components) to \(path)\n".utf8))
     }
 
+    /// Dev harness: render the "dots" and "grid" whiteboard backgrounds side by
+    /// side with a couple of shapes on top. Invoked `--render-bg`.
+    static func renderBackgrounds(to path: String) {
+        let panelW = 380, panelH = 240, gap = 20
+        let width = panelW * 2 + gap * 3, height = panelH * 2 + gap * 3
+        guard let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        ctx.setFillColor(NSColor(hex: 0xdee2e6).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        let shapes: [Element] = [
+            Element(type: "rectangle", x: 60, y: 60, width: 120, height: 66,
+                    backgroundColor: "#a5d8ff", fillStyle: .solid, seed: 11),
+            Element(type: "ellipse", x: 210, y: 110, width: 110, height: 74,
+                    backgroundColor: "#b2f2bb", fillStyle: .hachure, seed: 22),
+        ]
+
+        // Row 0: white board (editing wash). Row 1: dark board (translucent over
+        // a busy wallpaper) — the pattern must read on both.
+        let boards: [(NSColor, CGFloat)] = [(.white, 0.9), (NSColor(hex: 0x2b3038), 0.75)]
+        for (row, board) in boards.enumerated() {
+            for (col, pattern) in ["dots", "grid"].enumerated() {
+                let ox = gap + col * (panelW + gap)
+                let oy = gap + row * (panelH + gap)
+                let panel = CGRect(x: ox, y: oy, width: panelW, height: panelH)
+                ctx.saveGState()
+                ctx.setFillColor(board.0.withAlphaComponent(board.1).cgColor)
+                ctx.fill(panel)
+                ctx.clip(to: panel)
+                var cam = Camera()
+                cam.offset = CGPoint(x: -CGFloat(ox), y: -CGFloat(oy))
+                BackgroundPattern.draw(pattern, bounds: panel, camera: cam, in: ctx)
+                ctx.translateBy(x: CGFloat(ox), y: CGFloat(oy + panelH))
+                ctx.scaleBy(x: 1, y: -1)
+                ElementRenderer().draw(scene: Scene(elements: shapes), camera: Camera(), in: ctx)
+                ctx.restoreGState()
+                ctx.setStrokeColor(NSColor(hex: 0xadb5bd).cgColor)
+                ctx.stroke(panel)
+            }
+        }
+
+        guard let image = ctx.makeImage(),
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { return }
+        try? data.write(to: URL(fileURLWithPath: path))
+        FileHandle.standardError.write(Data("wrote background samples to \(path)\n".utf8))
+    }
+
     /// Dev harness: render a pasted table + its QR code side by side, exactly as
     /// the paste-wheel/context-menu paths build them. Invoked `--render-table`.
     static func renderTable(to path: String) {

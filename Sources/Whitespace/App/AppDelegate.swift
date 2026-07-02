@@ -141,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onSetEditOpacity: { [weak self] v in
                 self?.canvas.editBoardOpacity = v; self?.canvas.needsDisplay = true
             },
+            onSetBoardPattern: { [weak self] p in self?.canvas.boardPattern = p },
             onToggleKeepIcons: { [weak self] _ in
                 // Re-apply the window level immediately if currently editing.
                 guard let self, self.window.isEditing else { return }
@@ -174,6 +175,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleEdit()
 
         if let url = pendingOpenURL { pendingOpenURL = nil; openExcalidraw(url) }
+
+        promptLaunchAtLoginIfNeeded()
+    }
+
+    /// First launch only: offer to open Whitespace automatically at login.
+    private func promptLaunchAtLoginIfNeeded() {
+        guard !Settings.askedLaunchAtLogin, !LoginItem.isEnabled else { return }
+        Settings.askedLaunchAtLogin = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            let alert = NSAlert()
+            alert.messageText = "Open Whitespace at login?"
+            alert.informativeText = "Whitespace lives in your menu bar and on the desktop. Launch it automatically each time you log in? You can change this anytime from the menu-bar menu."
+            alert.addButton(withTitle: "Open at Login")
+            alert.addButton(withTitle: "Not Now")
+            // The canvas sits on the desktop layer, so a plain modal can hide
+            // behind the active app. Briefly become a regular app so the prompt
+            // is guaranteed frontmost, then drop back to menu-bar-only.
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            let choose = alert.runModal() == .alertFirstButtonReturn
+            NSApp.setActivationPolicy(.accessory)
+            if choose {
+                LoginItem.setEnabled(true)
+                self.menuBar.refreshLoginItem()
+            }
+        }
     }
 
     private func registerHotKeys() {

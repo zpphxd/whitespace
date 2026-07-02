@@ -17,6 +17,22 @@ enum Settings {
         static let editKeyCode = "editKeyCode", editMods = "editMods"
         static let paletteKeyCode = "paletteKeyCode", paletteMods = "paletteMods"
         static let sidebarPinned = "sidebarPinned"
+        static let boardPattern = "boardPattern"
+        static let askedLaunchAtLogin = "askedLaunchAtLogin"
+    }
+
+    /// Whether the first-run "open at login?" prompt has been shown (so it only
+    /// appears once). The actual on/off state lives in `LoginItem` / the system.
+    static var askedLaunchAtLogin: Bool {
+        get { defaults.bool(forKey: Key.askedLaunchAtLogin) }
+        set { defaults.set(newValue, forKey: Key.askedLaunchAtLogin) }
+    }
+
+    /// Whiteboard background pattern shown while editing: "dots", "grid", or
+    /// "none". Drawn under the elements and pans/zooms with the canvas.
+    static var boardPattern: String {
+        get { defaults.string(forKey: Key.boardPattern) ?? "dots" }
+        set { defaults.set(newValue, forKey: Key.boardPattern) }
     }
 
     /// When pinned, the right sidebar auto-opens on entering edit mode and stays

@@ -1,5 +1,16 @@
 import AppKit
 
+// Dev harness: verify SMAppService login-item registration round-trips under
+// this build's (ad-hoc) signing. Runs before the single-instance guard.
+if CommandLine.arguments.contains("--login-test") {
+    FileHandle.standardError.write(Data("initial status: \(LoginItem.isEnabled ? "enabled" : "disabled")\n".utf8))
+    let on = LoginItem.setEnabled(true)
+    FileHandle.standardError.write(Data("after register: \(on ? "enabled" : "disabled")\n".utf8))
+    let off = LoginItem.setEnabled(false)
+    FileHandle.standardError.write(Data("after unregister: \(off ? "enabled" : "disabled")\n".utf8))
+    exit(0)
+}
+
 // Register the bundled hand-drawn font before anything renders text (the dev
 // harness flags below render too, so this must come first).
 Fonts.registerBundled()
@@ -28,6 +39,11 @@ if let idx = CommandLine.arguments.firstIndex(of: "--render-drop-anim"),
 if let idx = CommandLine.arguments.firstIndex(of: "--render-table"),
    idx + 1 < CommandLine.arguments.count {
     StencilSheet.renderTable(to: CommandLine.arguments[idx + 1])
+    exit(0)
+}
+if let idx = CommandLine.arguments.firstIndex(of: "--render-bg"),
+   idx + 1 < CommandLine.arguments.count {
+    StencilSheet.renderBackgrounds(to: CommandLine.arguments[idx + 1])
     exit(0)
 }
 if CommandLine.arguments.contains("--test-bind") {

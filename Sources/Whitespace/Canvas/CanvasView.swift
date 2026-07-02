@@ -38,6 +38,12 @@ final class CanvasView: NSView {
     var idleBoardOpacity: CGFloat = 0
     var editBoardOpacity: CGFloat = Settings.editBoardOpacity
 
+    /// Whiteboard background pattern drawn under the elements while editing:
+    /// "dots", "grid", or "none". Follows pan/zoom.
+    var boardPattern: String = Settings.boardPattern {
+        didSet { if boardPattern != oldValue { needsDisplay = true } }
+    }
+
     // Interaction state
     private enum Drag {
         case none
@@ -248,6 +254,7 @@ final class CanvasView: NSView {
             ctx.setFillColor(NSColor.white.withAlphaComponent(boardOpacity).cgColor)
             ctx.fill(bounds)
         }
+        if isEditing { BackgroundPattern.draw(boardPattern, bounds: bounds, camera: camera, in: ctx) }
 
         drawSearchHighlights(in: ctx)
         if let anim = dropAnim {
