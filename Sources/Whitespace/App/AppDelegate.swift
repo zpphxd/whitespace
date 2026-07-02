@@ -1,9 +1,15 @@
 import AppKit
 import Carbon.HIToolbox
 import UniformTypeIdentifiers
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    /// Sparkle auto-updater. Started at launch; checks the appcast feed
+    /// (SUFeedURL in Info.plist) and installs Developer ID-signed updates.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     private var window: DesktopWindow!
     private var canvas: CanvasView!
@@ -156,7 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenFile: { [weak self] in self?.openExcalidrawFile() },
             onSearch: { [weak self] in self?.openSearch() },
             onConnectVault: { [weak self] in self?.connectVault() },
-            onInsertVaultNote: { [weak self] in self?.insertVaultNote() }
+            onInsertVaultNote: { [weak self] in self?.insertVaultNote() },
+            onCheckForUpdates: { [weak self] in self?.updaterController.checkForUpdates(nil) }
         )
 
         registerHotKeys()

@@ -22,6 +22,7 @@ final class MenuBarController {
     private var search: (() -> Void)?
     private var connectVault: (() -> Void)?
     private var insertVaultNote: (() -> Void)?
+    private var checkForUpdates: (() -> Void)?
     private let paletteItem: NSMenuItem
     private var loginMenuItem: NSMenuItem?
 
@@ -39,7 +40,8 @@ final class MenuBarController {
          onOpenFile: @escaping () -> Void,
          onSearch: @escaping () -> Void,
          onConnectVault: @escaping () -> Void,
-         onInsertVaultNote: @escaping () -> Void) {
+         onInsertVaultNote: @escaping () -> Void,
+         onCheckForUpdates: @escaping () -> Void) {
         self.onToggleEdit = onToggleEdit
         self.quitHandler = onQuit
         self.setEditOpacity = onSetEditOpacity
@@ -55,6 +57,7 @@ final class MenuBarController {
         self.search = onSearch
         self.connectVault = onConnectVault
         self.insertVaultNote = onInsertVaultNote
+        self.checkForUpdates = onCheckForUpdates
         paletteItem = NSMenuItem(title: "Hide Palette", action: nil, keyEquivalent: "q")
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         editItem = NSMenuItem(title: "Start Drawing", action: nil, keyEquivalent: "w")
@@ -121,6 +124,10 @@ final class MenuBarController {
         menu.addItem(exportHTMLItem)
         menu.addItem(.separator())
 
+        let updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesItem), keyEquivalent: "")
+        updatesItem.target = self
+        menu.addItem(updatesItem)
+
         let loginItem = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem(_:)), keyEquivalent: "")
         loginItem.target = self
         loginItem.state = LoginItem.isEnabled ? .on : .off
@@ -164,6 +171,8 @@ final class MenuBarController {
         board.submenu = sub
         return board
     }
+
+    @objc private func checkForUpdatesItem() { checkForUpdates?() }
 
     @objc private func toggleLoginItem(_ sender: NSMenuItem) {
         let now = LoginItem.setEnabled(!(sender.state == .on))

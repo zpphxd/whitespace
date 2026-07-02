@@ -46,6 +46,11 @@ if let idx = CommandLine.arguments.firstIndex(of: "--render-bg"),
     StencilSheet.renderBackgrounds(to: CommandLine.arguments[idx + 1])
     exit(0)
 }
+if let idx = CommandLine.arguments.firstIndex(of: "--render-dmg-bg"),
+   idx + 1 < CommandLine.arguments.count {
+    DMGBackground.run(to: CommandLine.arguments[idx + 1])
+    exit(0)
+}
 if CommandLine.arguments.contains("--test-bind") {
     // A shape with a centered bound label; probe a point over the label.
     var rect = Element(type: "rectangle", x: 100, y: 100, width: 160, height: 90, seed: 1)

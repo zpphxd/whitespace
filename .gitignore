@@ -6,9 +6,17 @@ Package.resolved
 # Built app bundle (produced by make_app.sh)
 Whitespace.app/
 
+# Distribution artifacts (produced by make_dmg.sh / make_release.sh).
+# appcast.xml IS tracked — it's the Sparkle feed served from the repo.
+Whitespace.dmg
+dmg-background.tiff
+releases/
+*.key
+
 # macOS
 .DS_Store
 
 # Logs
 *.log
 .claude/worktrees/
+web
